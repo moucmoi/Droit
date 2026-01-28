@@ -1,0 +1,129 @@
+/* Money Drop style resolution animation (zoom on bet answers, wrong answers drop money) */
+
+:root{
+  --res-ease: cubic-bezier(.2,.9,.2,1);
+  --res-red: rgba(239,68,68,.95);
+  --res-red-soft: rgba(239,68,68,.35);
+}
+
+/* Global focus: only answers are sharp */
+body.resolving .md-question,
+body.resolving .md-zones,
+body.resolving .md-money,
+body.resolving .md-controls,
+body.resolving .md-sidebar,
+body.resolving .md-header{
+  opacity: .14;
+  filter: blur(2px) saturate(.9);
+  transition: opacity 420ms var(--res-ease), filter 420ms var(--res-ease);
+}
+
+body.resolving .md-answers{
+  position: relative;
+  z-index: 20;
+  transform: scale(1.07);
+  transition: transform 520ms var(--res-ease);
+}
+
+body.resolving .md-answer{
+  transition: transform 520ms var(--res-ease), opacity 520ms var(--res-ease), filter 520ms var(--res-ease), box-shadow 520ms var(--res-ease), border-color 520ms var(--res-ease);
+}
+
+.md-answer.res-dim{
+  opacity: .35;
+  filter: grayscale(.35) blur(.4px);
+}
+
+.md-answer.res-focus{
+  box-shadow: 0 18px 44px rgba(0,0,0,.45), 0 0 40px rgba(0,212,255,.10);
+}
+
+/* Winning answer stays intact + glow */
+.md-answer.res-win{
+  border-color: rgba(34,197,94,.65);
+  box-shadow: 0 22px 52px rgba(0,0,0,.48), 0 0 50px rgba(34,197,94,.20);
+}
+
+/* Losing answers: red zone + trapdoor + drop */
+.md-answer.res-lose{
+  border-color: rgba(239,68,68,.65);
+  box-shadow: 0 22px 52px rgba(0,0,0,.48), 0 0 56px rgba(239,68,68,.18);
+}
+
+.md-answer.res-lose::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  border-radius:18px;
+  background: radial-gradient(600px 220px at 50% 110%, var(--res-red-soft), transparent 60%);
+  opacity: 0;
+  pointer-events:none;
+  transition: opacity 240ms var(--res-ease);
+}
+
+.md-answer.res-lose.res-drop::before{ opacity: 1; }
+
+/* Trapdoor / hole at bottom */
+.md-answer.res-lose::after{
+  content:"";
+  position:absolute;
+  left:10px;
+  right:10px;
+  bottom:10px;
+  height:14px;
+  border-radius:999px;
+  background: radial-gradient(circle at 50% 50%, rgba(0,0,0,.85), rgba(0,0,0,.15) 70%, transparent 75%);
+  transform: scaleX(.35) scaleY(.3);
+  opacity: 0;
+  pointer-events:none;
+}
+
+.md-answer.res-lose.res-drop::after{
+  opacity: 1;
+  animation: res-hole-open 900ms var(--res-ease) forwards;
+}
+
+@keyframes res-hole-open{
+  0%{ transform: scaleX(.35) scaleY(.3); opacity: 0; }
+  35%{ transform: scaleX(1.05) scaleY(1.2); opacity: 1; }
+  100%{ transform: scaleX(1.25) scaleY(1.7); opacity: .0; }
+}
+
+/* Drop the money text */
+.md-answer.res-lose.res-drop .md-answer-amount{
+  animation: res-money-drop 1000ms var(--res-ease) forwards;
+}
+
+@keyframes res-money-drop{
+  0%{ transform: translateY(0) rotate(0deg); opacity: 1; filter: blur(0); }
+  30%{ transform: translateY(10px) rotate(2deg); opacity: 1; }
+  100%{ transform: translateY(110px) rotate(10deg); opacity: 0; filter: blur(1px); }
+}
+
+/* Slight sink on lose */
+.md-answer.res-lose.res-drop{
+  animation: res-card-sink 1000ms var(--res-ease) forwards;
+}
+
+@keyframes res-card-sink{
+  0%{ transform: translateY(0); }
+  40%{ transform: translateY(0); }
+  100%{ transform: translateY(10px); opacity: .55; }
+}
+
+/* Zones become red during the fail */
+.md-zone.res-zone-lose{
+  border-color: rgba(239,68,68,.75);
+  background: rgba(239,68,68,.10);
+  box-shadow: inset 0 0 0 1px rgba(239,68,68,.18), 0 16px 34px rgba(0,0,0,.28);
+}
+
+.md-zone.res-zone-lose.res-drop{
+  animation: res-zone-pulse 900ms var(--res-ease) forwards;
+}
+
+@keyframes res-zone-pulse{
+  0%{ background: rgba(239,68,68,.06); }
+  40%{ background: rgba(239,68,68,.18); }
+  100%{ background: rgba(239,68,68,.10); }
+}

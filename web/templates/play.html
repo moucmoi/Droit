@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Partie - Gabarit</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='cinematic.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='resolution.css') }}" />
+</head>
+<body class="md-bg">
+  <!-- Overlay cinématique (piloté par web/static/cinematic.js) -->
+  <div id="cineOverlay" class="cine-overlay" aria-hidden="true"></div>
+
+  <div class="md-ambient" aria-hidden="true">
+    <div class="md-blob md-blob-a"></div>
+    <div class="md-blob md-blob-b"></div>
+  </div>
+
+  <div class="md-shell">
+    <header class="md-header">
+      <div class="md-brand">
+        <img src="{{ url_for('static', filename='placeholder.png') }}" alt="Logo" class="md-logo" />
+      </div>
+
+      <div class="md-header-right">
+        <div class="md-pill">
+          <span class="md-pill-label">Joueur:</span>
+          <span id="playerName" class="md-pill-value">...</span>
+        </div>
+        <div class="md-pill">
+          <span class="md-pill-label">Jetons:</span>
+          <span id="chips" class="md-pill-value md-gold">...</span>
+        </div>
+
+        <button id="btn5050" class="md-btn md-btn-secondary" type="button" title="Bonus 50/50 (si disponible)">50/50</button>
+
+        <form method="post" action="/reset" class="md-inline">
+          <button class="md-btn md-btn-ghost" type="submit">Nouvelle partie</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="md-layout">
+      <section class="md-main">
+        <div class="md-question">
+          <div class="md-qbadge">
+            <div class="md-qbadge-top">Question</div>
+            <div class="md-qbadge-num" id="qCounter">1</div>
+          </div>
+
+          <div class="md-qtext">
+            <div id="category" class="md-qcategory">Catégorie</div>
+            <div id="prompt" class="md-qprompt">Chargement...</div>
+          </div>
+
+          <div class="md-timer" aria-label="Chrono">
+            <svg class="md-timer-svg" viewBox="0 0 100 100" role="img">
+              <circle class="md-timer-bg" cx="50" cy="50" r="45" />
+              <circle id="timerProgress" class="md-timer-fg" cx="50" cy="50" r="45" />
+            </svg>
+            <div id="timerValue" class="md-timer-value">60</div>
+          </div>
+        </div>
+
+        <div class="md-board">
+          <!-- Answer cards -->
+          <div class="md-answers" role="group" aria-label="Réponses">
+            <div class="md-answer" data-key="A">
+              <div class="md-answer-letter">A</div>
+              <div id="ansA" class="md-answer-text">...</div>
+              <div id="amountA" class="md-answer-amount">0 €</div>
+            </div>
+            <div class="md-answer" data-key="B">
+              <div class="md-answer-letter">B</div>
+              <div id="ansB" class="md-answer-text">...</div>
+              <div id="amountB" class="md-answer-amount">0 €</div>
+            </div>
+            <div class="md-answer" data-key="C">
+              <div class="md-answer-letter">C</div>
+              <div id="ansC" class="md-answer-text">...</div>
+              <div id="amountC" class="md-answer-amount">0 €</div>
+            </div>
+            <div class="md-answer" data-key="D">
+              <div class="md-answer-letter">D</div>
+              <div id="ansD" class="md-answer-text">...</div>
+              <div id="amountD" class="md-answer-amount">0 €</div>
+            </div>
+          </div>
+
+          <!-- Drop zones with +/- controls -->
+          <div class="md-zones" role="group" aria-label="Zones de mise">
+            <div class="md-zone" data-key="A">
+              <div class="md-zone-controls">
+                <button class="md-img-btn" type="button" data-action="reset" data-key="A" title="Tout retirer" aria-label="Tout retirer">✖</button>
+                <button class="md-img-btn" type="button" data-action="add-100" data-key="A" title="+100 €">
+                   <img src="{{ url_for('static', filename='placeholder.png') }}" alt="+100" />
+                </button>
+                <button class="md-img-btn" type="button" data-action="add-1000" data-key="A" title="+1000 €">
+                   <img src="{{ url_for('static', filename='placeholder.png') }}" alt="+1000" />
+                </button>
+
+              </div>
+              <div class="md-zone-stacks" id="chipsVisualA" aria-hidden="true"></div>
+              <div class="md-zone-label" id="zoneLabelA">Glissez ici</div>
+              <input id="betA" class="md-hidden" type="number" min="0" step="100" value="0" />
+            </div>
+
+            <div class="md-zone" data-key="B">
+              <div class="md-zone-controls">
+                <button class="md-img-btn" type="button" data-action="reset" data-key="B" title="Tout retirer" aria-label="Tout retirer">✖</button>
+                <button class="md-img-btn" type="button" data-action="add-100" data-key="B" title="+100 €">
+                   <img src="{{ url_for('static', filename='placeholder.png') }}" alt="+100" />
+                </button>
+                <button class="md-img-btn" type="button" data-action="add-1000" data-key="B" title="+1000 €">
+                   <img src="{{ url_for('static', filename='placeholder.png') }}" alt="+1000" />
+                </button>
+
+              </div>
+              <div class="md-zone-stacks" id="chipsVisualB" aria-hidden="true"></div>
+              <input id="betB" class="md-hidden" type="number" min="0" step="100" value="0" />
+            </div>
+
+            <div class="md-zone" data-key="C">
+              <div class="md-zone-controls">
+                <button class="md-img-btn" type="button" data-action="reset" data-key="C" title="Tout retirer" aria-label="Tout retirer">✖</button>
+                <button class="md-img-btn" type="button" data-action="add-100" data-key="C" title="+100 €">
+                   <img src="{{ url_for('static', filename='placeholder.png') }}" alt="+100" />
+                </button>
+                <button class="md-img-btn" type="button" data-action="add-1000" data-key="C" title="+1000 €">
+                   <img src="{{ url_for('static', filename='placeholder.png') }}" alt="+1000" />
+                </button>
+
+              </div>
+              <div class="md-zone-stacks" id="chipsVisualC" aria-hidden="true"></div>
+              <div class="md-zone-label" id="zoneLabelC">Glissez ici</div>
+              <input id="betC" class="md-hidden" type="number" min="0" step="100" value="0" />
+            </div>
+
+            <div class="md-zone" data-key="D">
+              <div class="md-zone-controls">
+                <button class="md-img-btn" type="button" data-action="reset" data-key="D" title="Tout retirer" aria-label="Tout retirer">✖</button>
+                <button class="md-img-btn" type="button" data-action="add-100" data-key="D" title="+100 €">
+                   <img src="{{ url_for('static', filename='placeholder.png') }}" alt="+100" />
+                </button>
+                <button class="md-img-btn" type="button" data-action="add-1000" data-key="D" title="+1000 €">
+                   <img src="{{ url_for('static', filename='placeholder.png') }}" alt="+1000" />
+                </button>
+
+              </div>
+              <div class="md-zone-stacks" id="chipsVisualD" aria-hidden="true"></div>
+              <div class="md-zone-label" id="zoneLabelD">Glissez ici</div>
+              <input id="betD" class="md-hidden" type="number" min="0" step="100" value="0" />
+            </div>
+          </div>
+
+          <!-- Remaining tokens bar -->
+          <div class="md-money">
+            <div class="md-money-title">Jetons restants à placer</div>
+            <div id="moneyStacks" class="md-money-stacks" aria-hidden="true"></div>
+            <div class="md-money-bar">
+              <div class="md-money-bar-track">
+                <div id="remainingBar" class="md-money-bar-fill"></div>
+              </div>
+              <div class="md-money-bar-text"><span id="unbet">0</span> € / <span id="totalChips">0</span> €</div>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="md-controls">
+            <div class="md-metric">
+              <div class="md-metric-label">Total misé</div>
+              <div class="md-metric-value md-accent" id="totalBet">0</div>
+              <div class="md-metric-unit">€</div>
+            </div>
+
+            <button id="submit" class="md-btn md-btn-primary" type="button">Valider la mise</button>
+
+            <div class="md-metric">
+              <div class="md-metric-label">Non misé</div>
+              <div class="md-metric-value md-gold" id="unbetValue">0</div>
+              <div class="md-metric-unit">€</div>
+            </div>
+          </div>
+
+          <div id="message" class="md-message" role="status" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <aside class="md-sidebar" aria-label="Classement">
+        <div class="md-sidebar-title">
+          <span class="md-star">★</span>
+          <span>Classement</span>
+        </div>
+        <div id="leaderboard" class="md-leaderboard"></div>
+        <div id="leaderboardFooter" class="md-leaderboard-footer"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='cinematic.js') }}"></script>
+  <script src="{{ url_for('static', filename='resolution.js') }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

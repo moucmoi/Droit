@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard Hébergeur - Gabarit</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='lobby.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='host_dashboard.css') }}" />
+</head>
+<body class="md-bg host-dashboard">
+  <div class="md-shell">
+    <!-- HEADER -->
+    <header class="host-header">
+      <div class="md-brand">
+        <img src="{{ url_for('static', filename='placeholder.png') }}" alt="Logo" class="md-logo" />
+      </div>
+      <div class="host-header-info">
+        <div class="md-pill">
+          <span class="md-pill-label">Lobby:</span>
+          <span class="md-pill-value" id="lobbyId">{{ lobby_id }}</span>
+        </div>
+        <div id="statusBadge" class="host-status-badge waiting">En attente...</div>
+      </div>
+      <div class="host-header-actions">
+        <a class="md-btn md-btn-ghost" href="/lobby/{{ lobby_id }}/client" target="_blank" rel="noopener">👁️ Vue joueur</a>
+        <a class="md-btn md-btn-ghost" href="/menu">Menu</a>
+      </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="host-main">
+      <!-- LEFT SIDEBAR: CONTROLS -->
+      <aside class="host-sidebar">
+        <div class="host-sidebar-section">
+          <h3>Contrôles</h3>
+          <div id="buttonContainer" class="host-buttons-group">
+            <!-- Les boutons vont être générés dynamiquement -->
+          </div>
+          <div id="hostMsg" class="host-message"></div>
+        </div>
+
+        <!-- SETTINGS PANEL -->
+        <div class="host-sidebar-section">
+          <h3>⚙️ Paramètres</h3>
+          <div class="host-settings">
+            <div class="setting-item">
+              <label for="maxPlayers">Joueurs max:</label>
+              <input type="number" id="maxPlayers" min="1" max="50" value="10" />
+            </div>
+            <div class="setting-item">
+              <label for="questionTimer">Temps par question (s):</label>
+              <input type="number" id="questionTimer" min="5" max="120" value="30" />
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- CENTRAL CONTENT -->
+      <section class="host-content">
+        <!-- GAME STATE -->
+        <div class="host-panel game-state-panel">
+          <h2>📊 État du jeu</h2>
+          <div class="game-state-info">
+            <div class="info-item">
+              <span class="info-label">Phase:</span>
+              <span id="phase" class="info-value">En attente...</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Question:</span>
+              <span id="qIndex" class="info-value">-</span> / <span id="qTotal">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Temps restant:</span>
+              <span id="timeRemaining" class="info-value timer">-</span>s
+            </div>
+          </div>
+
+          <!-- QUESTION DISPLAY -->
+          <div id="questionBox" class="question-box" style="display: none;">
+            <div class="question-category" id="category">Catégorie</div>
+            <div class="question-prompt" id="prompt">Question en attente...</div>
+            
+            <!-- ANSWERS WITH STATISTICS -->
+            <div id="answers" class="answers-grid"></div>
+          </div>
+        </div>
+
+        <!-- LEADERBOARD -->
+        <div class="host-panel leaderboard-panel">
+          <h2>🏆 Classement</h2>
+          <div id="leaderboard" class="host-leaderboard"></div>
+        </div>
+      </section>
+
+      <!-- RIGHT SIDEBAR: PLAYERS LIST -->
+      <aside class="host-players-sidebar">
+        <h2>👥 Joueurs ({playersCount})</h2>
+        <div id="playersList" class="host-players-list"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    window.LOBBY_ID = "{{ lobby_id }}";
+    window.ROLE = "host";
+    window.PLAYER_NAME = "{{ player_name }}";
+  </script>
+  <script src="{{ url_for('static', filename='host_dashboard.js') }}"></script>
+</body>
+</html>

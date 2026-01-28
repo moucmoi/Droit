@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Podium final - Gabarit</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='cinematic.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='resolution.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='podium_final.css') }}" />
+</head>
+<body class="md-bg podium-final-page">
+  <div id="cineOverlay" class="cine-overlay" aria-hidden="true"></div>
+
+  <div class="md-ambient" aria-hidden="true">
+    <div class="md-blob md-blob-a"></div>
+    <div class="md-blob md-blob-b"></div>
+  </div>
+
+  <div class="podium-wrapper">
+    <header class="podium-header">
+      <div class="podium-title-container">
+        <h1 class="podium-main-title"></h1>
+        <p class="podium-subtitle"></p>
+      </div>
+    </header>
+
+    <main class="podium-main">
+      <!-- Podium animé -->
+      <div class="podium-stage">
+        <!-- 2ème place -->
+        <div class="podium-position pos-2">
+          <div class="position-player">
+            <div class="player-avatar">👤</div>
+            <div class="player-info">
+              <div class="player-rank">2ème</div>
+              <div class="player-name" id="rank2Name">--</div>
+              <div class="player-score" id="rank2Score">0 €</div>
+            </div>
+          </div>
+          <div class="position-base">
+            <span class="position-medal">🥈</span>
+          </div>
+        </div>
+
+        <!-- 1ère place (champion) -->
+        <div class="podium-position pos-1">
+          <div class="position-player champion">
+            <div class="player-avatar">👤</div>
+            <div class="player-info">
+              <div class="player-rank">CHAMPION</div>
+              <div class="player-name" id="rank1Name">--</div>
+              <div class="player-score" id="rank1Score">0 €</div>
+            </div>
+          </div>
+          <div class="position-base">
+            <span class="position-medal">🥇</span>
+          </div>
+        </div>
+
+        <!-- 3ème place -->
+        <div class="podium-position pos-3">
+          <div class="position-player">
+            <div class="player-avatar">👤</div>
+            <div class="player-info">
+              <div class="player-rank">3ème</div>
+              <div class="player-name" id="rank3Name">--</div>
+              <div class="player-score" id="rank3Score">0 €</div>
+            </div>
+          </div>
+          <div class="position-base">
+            <span class="position-medal">🥉</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Classement complet -->
+      <div class="full-ranking">
+        <h2>Classement Complet</h2>
+        <div class="ranking-list" id="rankingList"></div>
+      </div>
+
+      <!-- Confettis -->
+      <div class="confetti-container" id="confettiContainer"></div>
+
+      <!-- Bouton retour -->
+      <div class="podium-actions">
+        <button class="btn-menu" onclick="window.location.href='/menu'">↩️ Retour au menu</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script src="{{ url_for('static', filename='cinematic.js') }}"></script>
+  <script src="{{ url_for('static', filename='resolution.js') }}"></script>
+  <script src="{{ url_for('static', filename='podium_final.js') }}"></script>
+</body>
+</html>

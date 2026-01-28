@@ -1,0 +1,153 @@
+.lobby-shell{
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 18px 22px 24px 22px;
+  display: grid;
+  grid-template-columns: 1.2fr 1.6fr 1fr;
+  gap: 16px;
+}
+
+.lobby-shell-client{
+  grid-template-columns: 1.8fr 1fr;
+}
+
+@media (max-width: 1100px){
+  .lobby-shell{ grid-template-columns: 1fr; }
+}
+
+.lobby-panel{
+  border-radius: 18px;
+  border: 1px solid rgba(37,99,235,.30);
+  background: rgba(13,27,60,.42);
+  backdrop-filter: blur(12px);
+  padding: 16px;
+  box-shadow: 0 18px 55px rgba(0,0,0,.35);
+}
+
+.lobby-title{
+  font-weight: 950;
+  letter-spacing: .5px;
+  margin-bottom: 12px;
+  color: rgba(255,255,255,.92);
+}
+
+.lobby-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+
+.lobby-hint{ color: rgba(255,255,255,.75); min-height: 18px; font-size: 13px; }
+
+.lobby-state{ display:flex; gap:14px; flex-wrap:wrap; color: rgba(255,255,255,.80); font-size: 13px; margin-bottom: 10px; }
+
+.lobby-qbox{
+  border-radius: 16px;
+  border: 1px solid rgba(0,212,255,.22);
+  background: rgba(10,22,40,.55);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.lobby-qcat{ font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; color: rgba(255,215,0,.95); margin-bottom: 6px; }
+.lobby-qprompt{ font-size: 18px; font-weight: 900; line-height: 1.2; }
+
+.lobby-answers{ display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+.lobby-answer{
+  border-radius: 16px;
+  border: 1px solid rgba(0,212,255,.20);
+  background: rgba(0,212,255,.08);
+  padding: 12px 12px;
+  font-weight: 850;
+  color: rgba(255,255,255,.92);
+  cursor: pointer;
+  transition: transform 160ms ease, background 180ms ease, border-color 180ms ease;
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+}
+
+.lobby-answer:hover{ transform: translateY(-1px); background: rgba(0,212,255,.12); border-color: rgba(0,212,255,.32); }
+
+.lobby-answer .key{
+  width: 28px; height: 28px; border-radius: 10px;
+  display:flex; align-items:center; justify-content:center;
+  background: rgba(0,212,255,.18);
+  border: 1px solid rgba(0,212,255,.22);
+}
+
+.lobby-answer.selected{ border-color: rgba(255,215,0,.65); background: rgba(255,215,0,.10); }
+.lobby-answer.correct{ border-color: rgba(34,197,94,.70); background: rgba(34,197,94,.10); }
+.lobby-answer.wrong{ border-color: rgba(239,68,68,.70); background: rgba(239,68,68,.10); }
+
+.lobby-players{ display:flex; flex-direction:column; gap:8px; }
+
+.lobby-player{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(37,99,235,.26);
+  background: rgba(13,27,60,.55);
+}
+
+.lobby-player .name{ font-weight: 850; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lobby-player .meta{ color: rgba(255,255,255,.70); font-size: 12px; }
+
+/* Leaderboard styles */
+.lobby-leaderboard{ display:flex; flex-direction:column; gap:10px; }
+
+.lobby-lb-item{
+  display:grid;
+  grid-template-columns: 40px 1fr 100px;
+  gap:12px;
+  align-items:center;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(37,99,235,.26);
+  background: rgba(13,27,60,.55);
+  transition: all 400ms cubic-bezier(.2,.9,.2,1);
+  animation: lb-entry 600ms cubic-bezier(.2,.9,.2,1) forwards;
+}
+
+@keyframes lb-entry{
+  0%{
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  100%{
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.lobby-lb-item:nth-child(2){ animation-delay: 80ms; }
+.lobby-lb-item:nth-child(3){ animation-delay: 160ms; }
+.lobby-lb-item:nth-child(4){ animation-delay: 240ms; }
+.lobby-lb-item:nth-child(5){ animation-delay: 320ms; }
+
+.lobby-lb-item:hover{
+  background: rgba(13,27,60,.75);
+  border-color: rgba(37,99,235,.42);
+  transform: translateX(2px);
+}
+
+.lb-rank{
+  font-size: 20px;
+  text-align: center;
+  font-weight: 900;
+}
+
+.lb-name{
+  font-weight: 850;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255,255,255,.92);
+}
+
+.lb-score{
+  font-weight: 950;
+  text-align: right;
+  font-size: 16px;
+  color: rgba(255,215,0,.95);
+}

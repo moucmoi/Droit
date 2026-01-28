@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Page d'accueil à personnaliser</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+</head>
+<body class="md-bg md-home-bg">
+  <div class="md-home-ambient"></div>
+  <div class="md-home-shell">
+    <header class="md-home-hero">
+      <img src="{{ url_for('static', filename='placeholder.png') }}" alt="Logo à insérer" class="md-home-logo" />
+      <div class="md-home-title" contenteditable="false"></div>
+      <div class="md-home-subtitle" contenteditable="false"></div>
+    </header>
+    <main class="md-home-main">
+      <div class="md-home-card">
+        <a href="/menu" class="md-menu-btn">Entrer dans le menu</a>
+      </div>
+    </main>
+    <script>
+      // Auto-redirect to /menu after a short delay
+      setTimeout(function() {
+        window.location.href = '/menu';
+      }, 1200);
+    </script>
+  </div>
+</body>
+</html>

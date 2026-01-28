@@ -1,0 +1,97 @@
+/* Cinematic intro: question-only, suspense, reveal board + sequential answers */
+
+:root{
+  --cine-ease: cubic-bezier(.2,.9,.2,1);
+}
+
+/* Ensure we can animate the "camera" (whole UI) */
+.md-shell{
+  transition: transform 900ms var(--cine-ease), opacity 900ms var(--cine-ease), filter 900ms var(--cine-ease);
+  transform-origin: 50% 20%;
+}
+
+body.cine-active .md-shell{
+  opacity: 0;
+  transform: scale(1.08);
+  filter: blur(6px) brightness(.75) saturate(1.1);
+  pointer-events: none;
+}
+
+body.cine-reveal .md-shell{
+  opacity: 1;
+  transform: scale(1);
+  filter: none;
+  pointer-events: auto;
+}
+
+/* Fullscreen overlay for the question */
+.cine-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(1200px 800px at 50% 40%, rgba(0,212,255,.10), transparent 60%),
+    radial-gradient(900px 600px at 30% 70%, rgba(255,215,0,.08), transparent 55%),
+    rgba(8,12,22,.94);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 700ms var(--cine-ease);
+}
+
+.cine-overlay.is-visible{
+  display: flex;
+  opacity: 1;
+}
+
+.cine-card{
+  max-width: min(980px, 92vw);
+  padding: 34px 40px;
+  border-radius: 22px;
+  border: 1.5px solid rgba(0,212,255,.25);
+  background: rgba(13,27,60,.55);
+  box-shadow: 0 20px 60px rgba(0,0,0,.55), 0 0 55px rgba(0,212,255,.12);
+  transform: translateY(14px) scale(.96);
+  opacity: 0;
+  animation: none;
+}
+
+.cine-overlay.is-visible .cine-card{
+  animation: cine-card-in 850ms var(--cine-ease) forwards;
+}
+
+@keyframes cine-card-in{
+  0%{ opacity: 0; transform: translateY(14px) scale(.96); }
+  100%{ opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.cine-title{
+  font-size: 12px;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.65);
+  margin-bottom: 12px;
+}
+
+.cine-question{
+  font-size: clamp(26px, 3.2vw, 44px);
+  font-weight: 950;
+  line-height: 1.15;
+  text-align: center;
+  color: rgba(255,255,255,.98);
+  text-shadow: 0 1px 2px rgba(0,0,0,.55), 0 0 28px rgba(0,212,255,.25);
+}
+
+/* Answers sequential reveal */
+.md-answer.cine-answer{
+  opacity: 0;
+  transform: translateY(14px) scale(.985);
+  transition: opacity 520ms var(--cine-ease), transform 520ms var(--cine-ease);
+}
+
+.md-answer.cine-answer.is-visible{
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}

@@ -14,12 +14,15 @@ from .models import AnswerKey, GameConfig, GameResult, Player, Question
 class BetResolution:
     correct: AnswerKey
     correct_label: str
-    kept: int
+    action: str
+    bet_amount: int
+    delta: int
+    bank_after: int
+    multiplier: float
+    was_correct: bool
     lost: int
-    bet_total: int
-    unbet: int
+    gained: int
     explanation: str
-    correct_bet: int
 
 
 class GameSession:
@@ -50,7 +53,7 @@ class GameSession:
             return None
         return self.questions[self.index]
 
-    def submit_bets(self, bets: Dict[AnswerKey, int]) -> BetResolution:
+    def submit_action(self, answer: AnswerKey, action: str, amount: int) -> BetResolution:
         self.last_activity = time.time()
 
         if self.finished or self.eliminated:
@@ -61,29 +64,50 @@ class GameSession:
             self.finished = True
             raise ValueError("plus de question")
 
-        for k in ["A", "B", "C", "D"]:
-            if k not in bets:
-                bets[k] = 0
-            if bets[k] < 0:
-                raise ValueError("mise négative")
+        answer = (answer or "").strip().upper()
+        if answer not in ("A", "B", "C", "D"):
+            raise ValueError("réponse invalide (A/B/C/D)")
 
-        bet_total = sum(bets.values())
-        if bet_total > self.player.chips:
-            raise ValueError("mises > jetons disponibles")
+        action = (action or "").strip().lower()
+        if action not in ("check", "bet", "all-in"):
+            raise ValueError("action invalide (check/bet/all-in)")
 
-        unbet = self.player.chips - bet_total
-        if not self.config.allow_unbet_chips and unbet != 0:
-            raise ValueError("vous devez miser tous vos jetons")
+        bank_before = self.player.chips
 
-        kept = bets[q.correct] + unbet
-        lost = bet_total - bets[q.correct]
+        if action == "check":
+            amount = 0
+        elif action == "all-in":
+            amount = bank_before
+        else:
+            try:
+                amount = int(amount)
+            except Exception:
+                raise ValueError("montant invalide")
+            if amount < 0:
+                raise ValueError("montant négatif interdit")
+            if amount > bank_before:
+                raise ValueError("montant > banque disponible")
 
-        self.player.chips = kept
-        if bets[q.correct] > 0:
+        correct = answer == q.correct
+        delta = 0
+        multiplier = 0.0
+
+        if action == "check":
+            multiplier = 0.0
+            delta = 0
+        elif action == "bet":
+            multiplier = 1.25
+            delta = int(-amount + amount * multiplier) if correct else -amount
+        else:  # all-in
+            multiplier = 2.25
+            delta = int(bank_before * 1.25) if correct else -bank_before
+
+        self.player.chips += delta
+        if correct:
             self.correct_answers += 1
 
         self.details.append(
-            f"Q{self.index+1}: correct={q.correct} bet={bet_total} kept={kept} lost={lost}"
+            f"Q{self.index+1}: action={action} answer={answer} correct={q.correct} delta={delta} bank={self.player.chips}"
         )
 
         self.index += 1
@@ -95,12 +119,15 @@ class GameSession:
         return BetResolution(
             correct=q.correct,
             correct_label=q.answers[q.correct],
-            kept=kept,
-            lost=lost,
-            bet_total=bet_total,
-            unbet=unbet,
+            action=action,
+            bet_amount=amount,
+            delta=delta,
+            bank_after=self.player.chips,
+            multiplier=multiplier,
+            was_correct=correct,
+            lost=max(0, -delta),
+            gained=max(0, delta),
             explanation=q.explanation,
-            correct_bet=bets[q.correct],
         )
 
     def result(self) -> GameResult:
@@ -181,10 +208,10 @@ class Lobby:
         self.index = 0
         self.started = False
 
-        # submissions: session_id -> bets dict
-        self.submissions: Dict[str, Dict[AnswerKey, int]] = {}
+        # submissions: session_id -> {"answer": ..., "action": ..., "amount": ...}
+        self.submissions: Dict[str, Dict[str, object]] = {}
 
-        # last round results: session_id -> resolution dict
+        # last round results: session_id -> resolution dict (compat front)
         self.last_results: Dict[str, dict] = {}
 
         self.question_start = 0.0
@@ -214,13 +241,39 @@ class Lobby:
             return None
         return self.questions[self.index]
 
-    def submit(self, session_id: str, bets: Dict[AnswerKey, int]) -> None:
+    def submit(self, session_id: str, bet_payload: Dict[AnswerKey, int] | Dict[str, object]) -> None:
         if not self.started:
             raise ValueError("partie non démarrée")
         if session_id in self.submissions:
             # override allowed
             pass
-        self.submissions[session_id] = bets
+
+        action = "check"
+        amount = 0
+        answer: AnswerKey = "A"
+        player = next((pl for pl in self.players if pl.session_id == session_id), None)
+        bank = player.chips if player else self.config.starting_chips
+
+        if isinstance(bet_payload, dict) and ("action" in bet_payload or "answer" in bet_payload):
+            action = str(bet_payload.get("action", "check")).lower()
+            answer = str(bet_payload.get("answer", "A")).upper()[:1] or "A"  # type: ignore[assignment]
+            try:
+                amount = int(bet_payload.get("amount", 0))
+            except Exception:
+                amount = 0
+        else:
+            bets = {k: int(bet_payload.get(k, 0)) for k in ["A", "B", "C", "D"]} if isinstance(bet_payload, dict) else {}
+            amount = sum(bets.values())
+            answer = max(bets.items(), key=lambda kv: kv[1])[0] if bets else "A"  # type: ignore[index]
+            if amount <= 0:
+                action = "check"
+            elif amount >= bank:
+                action = "all-in"
+                amount = bank
+            else:
+                action = "bet"
+
+        self.submissions[session_id] = {"action": action, "amount": amount, "answer": answer}
 
         # maybe resolve
         if self._should_resolve():
@@ -241,26 +294,43 @@ class Lobby:
             return
 
         for p in self.players:
-            bets = self.submissions.get(p.session_id, {"A": 0, "B": 0, "C": 0, "D": 0})
-            bet_total = sum(bets.values())
-            unbet = max(0, p.chips - bet_total)
-            kept = bets.get(q.correct, 0) + unbet
-            lost = bet_total - bets.get(q.correct, 0)
-            correct_bet = bets.get(q.correct, 0)
+            submission = self.submissions.get(p.session_id, {"action": "check", "amount": 0, "answer": None})
+            action = str(submission.get("action", "check") or "check").lower()
+            amount = int(submission.get("amount", 0) or 0)
+            answer = str(submission.get("answer", "") or "").upper()[:1]
 
-            p.chips = kept
-            if correct_bet > 0:
+            bank_before = p.chips
+            if action == "all-in":
+                amount = bank_before
+            amount = max(0, min(amount, bank_before))
+            correct = answer == q.correct
+
+            if action == "check":
+                delta = 0
+            elif action == "bet":
+                delta = int(-amount + amount * 1.25) if correct else -amount
+            elif action == "all-in":
+                delta = int(bank_before * 1.25) if correct else -bank_before
+            else:
+                delta = 0
+
+            p.chips += delta
+            if correct:
                 p.correct_answers += 1
+            if p.chips <= 0:
+                p.chips = 0
 
             self.last_results[p.session_id] = {
                 "correct": q.correct,
                 "correct_label": q.answers[q.correct],
-                "kept": kept,
-                "lost": lost,
-                "bet_total": bet_total,
-                "unbet": unbet,
+                "kept": p.chips,
+                "lost": max(0, -delta),
+                "bet_total": amount,
+                "unbet": max(0, bank_before - amount),
                 "explanation": q.explanation,
-                "correct_bet": correct_bet,
+                "correct_bet": amount if correct else 0,
+                "action": action,
+                "gained": max(0, delta),
             }
 
         # advance
@@ -316,4 +386,3 @@ class LobbyManager:
     def delete(self, lobby_id: str) -> None:
         with self._lock:
             self._lobbies.pop(lobby_id, None)
-

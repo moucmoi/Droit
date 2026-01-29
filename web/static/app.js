@@ -143,7 +143,7 @@ function updateVisuals(state){
   // Enable validate only when all chips placed
   const submitBtn = $('submit');
   if(submitBtn){
-    submitBtn.disabled = !state?.question || !!state?.finished || !!state?.eliminated || remaining !== 0;
+    submitBtn.disabled = !state?.question || !!state?.finished || !!state?.eliminated;
   }
 }
 
@@ -322,17 +322,29 @@ async function submit(){
   const state = await getState();
   const b = getBets();
   const sum = totalBet(b);
+  const chips = state?.player?.chips ?? 0;
 
-  // Web app config currently allows unbet chips, but UI wants full distribute.
-  if(sum !== (state?.player?.chips ?? 0)){
-    setMessage(`Vous devez miser tous vos jetons ! Misé: ${sum} / Disponible: ${state?.player?.chips ?? 0}`);
-    return;
+  const [answer, topBet] = Object.entries(b).reduce(
+    (best, cur) => (cur[1] > best[1] ? cur : best),
+    ['A', 0]
+  );
+
+  let action = 'bet';
+  let amount = Math.min(sum, chips);
+  if(sum <= 0){
+    action = 'check';
+    amount = 0;
+  } else if(sum >= chips){
+    action = 'all-in';
+    amount = chips;
   }
+
+  const payload = {answer, action, amount};
 
   const r = await fetch('/api/bet', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(b)
+    body: JSON.stringify(payload)
   });
   const payload = await r.json().catch(()=>({ok:false, error:'erreur'}));
   if(!r.ok || !payload.ok){
@@ -372,11 +384,27 @@ async function submit(){
 async function autoSubmit(){
   // Auto-submit even if not fully distributed (backend allows it)
   const b = getBets();
+  const chips = (await getState())?.player?.chips ?? 0;
+  const sum = totalBet(b);
+  const [answer, topBet] = Object.entries(b).reduce(
+    (best, cur) => (cur[1] > best[1] ? cur : best),
+    ['A', 0]
+  );
+  let action = 'bet';
+  let amount = Math.min(sum, chips);
+  if(sum <= 0){
+    action = 'check';
+    amount = 0;
+  } else if(sum >= chips){
+    action = 'all-in';
+    amount = chips;
+  }
+  const payload = {answer, action, amount};
 
   const r = await fetch('/api/bet', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(b)
+    body: JSON.stringify(payload)
   });
   const payload = await r.json().catch(()=>({ok:false, error:'erreur'}));
   if(!r.ok || !payload.ok){
@@ -560,4 +588,3 @@ if(location.pathname === '/play'){
     poll();
   }
 }
-

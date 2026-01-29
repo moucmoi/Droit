@@ -8,6 +8,13 @@ Le front est volontairement neutralisé : logos, titres, sous‑titres et imag
 - Front web copié dans `web/` avec gabarits épurés : les pages HTML utilisent `placeholder.png` (1×1 transparent) et des champs vides pour les titres/sous‑titres.  
 - Les boutons, formulaires et flux temps réel restent fonctionnels pour servir de maquette.
 
+## Règles actuelles (mode “poker-quiz”)
+- Banque de départ : 1 000 € par joueur.
+- À chaque question : choisir une réponse A/B/C/D puis une action :
+  - `check` : aucun risque ni gain.
+  - `mise` : miser un montant ≤ banque, gain net +25 % de la mise si bon, perte de la mise sinon.
+  - `all-in` : miser tout ; banque ×2,25 si bon, banque à 0 sinon.
+
 ## Personnaliser le front
 1. Remplacez `web/static/placeholder.png` par vos visuels ou changez les `src` des images dans `web/templates/*.html`.  
 2. Ajoutez éventuellement une vidéo de fond en décommentant la balise `<video>` dans `web/templates/menu.html`.  

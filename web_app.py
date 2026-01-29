@@ -46,7 +46,7 @@ def create_app() -> Flask:
     engine = MoneyDropEngine(build_question_bank())
     sessions = SessionManager()
     lobbies = LobbyManager()
-    config = GameConfig(starting_chips=10000, question_count=7, allow_unbet_chips=True)
+    config = GameConfig(starting_chips=1000, question_count=7, allow_unbet_chips=True)
 
     create_lobby_password = os.environ.get("MONEYDROP_CREATE_PASSWORD", "Droit_Terrasse2026")
 
@@ -62,11 +62,12 @@ def create_app() -> Flask:
     class RTPlayer:
         sid: str
         name: str
-        score: int = 10000  # capital à miser (jetons)
-        choice: Optional[str] = None
+        score: int = 1000  # banque en euros
+        answer: Optional[str] = None  # réponse choisie (A/B/C/D)
+        action: str = "check"
+        bet_amount: int = 0
         is_correct: Optional[bool] = None
         eliminated: bool = False  # Défaite totale (capital=0)
-        bets: Dict[str, int] = field(default_factory=lambda: {"A": 0, "B": 0, "C": 0, "D": 0})
         socket_id: Optional[str] = None  # SocketIO session ID
         ip: Optional[str] = None  # last known IP address
 
@@ -137,12 +138,13 @@ def create_app() -> Flask:
                 self.question_started_at = None
                 self.paused_remaining = None
                 for p in self.players.values():
-                    p.score = 10000  # Reset jetons
-                    p.eliminated = False  # Reset statut éliminé
-                    p.choice = None
+                    p.score = 1000  # Banque de départ
+                    p.eliminated = False
+                    p.answer = None
+                    p.action = "check"
+                    p.bet_amount = 0
                     p.is_correct = None
-                    p.bets = {"A": 0, "B": 0, "C": 0, "D": 0}
-                # Le host déclenche explicitement le lancement de question
+            # Le host déclenche explicitement le lancement de question
                 self.phase = "waiting"
 
         def launch_question(self) -> None:
@@ -154,11 +156,11 @@ def create_app() -> Flask:
                     return
                 self.correct = None
                 for p in self.players.values():
-                    p.choice = None
+                    p.answer = None
                     p.is_correct = None
-                    # Ne réinitialiser les mises que si le joueur n'est pas éliminé
                     if not p.eliminated:
-                        p.bets = {"A": 0, "B": 0, "C": 0, "D": 0}
+                        p.action = "check"
+                        p.bet_amount = 0
                 self.phase = "question"
                 # Le chrono démarre après la cinématique (plateau visible)
                 self.question_started_at = time.time() + self.CINEMATIC_DELAY_SECONDS
@@ -189,22 +191,57 @@ def create_app() -> Flask:
                 c = (choice or "").strip().upper()[:1]
                 if c not in ("A", "B", "C", "D"):
                     return
-                self.players[sid].choice = c
+                self.players[sid].answer = c
 
-        def place_bets(self, sid: str, bets: Dict[str, int]) -> None:
-            """Place les mises d'un joueur"""
+        def place_bets(self, sid: str, bet_payload: Dict[str, Any]) -> None:
+            """Enregistre l'action (check/mise/all-in) et la réponse choisie."""
             with self.lock:
                 if self.phase != "question":
                     return
                 if sid not in self.players:
                     return
                 p = self.players[sid]
-                # Valider les mises jetons
-                total_bet = sum(bets.get(k, 0) for k in ["A", "B", "C", "D"])
-                if total_bet > p.score:
-                    return  # Mise invalide
-                
-                p.bets = {k: bets.get(k, 0) for k in ["A", "B", "C", "D"]} 
+
+                # Parsing compat : accepter ancien format {A:200,...} ou nouveau {action,answer,amount}
+                action = None
+                answer = None
+                amount = 0
+
+                if isinstance(bet_payload, dict) and ("action" in bet_payload or "answer" in bet_payload):
+                    action = str(bet_payload.get("action", "check")).lower()
+                    answer = str(bet_payload.get("answer", "")).upper()[:1]
+                    try:
+                        amount = int(bet_payload.get("amount", 0))
+                    except Exception:
+                        amount = 0
+                else:
+                    # Ancien format : somme des mises détermine l'action
+                    bets = {k: int(bet_payload.get(k, 0)) for k in ["A", "B", "C", "D"]} if isinstance(bet_payload, dict) else {}
+                    amount = sum(bets.values())
+                    answer = max(bets.items(), key=lambda kv: kv[1])[0] if bets else p.answer
+                    if amount <= 0:
+                        action = "check"
+                    elif amount >= p.score:
+                        action = "all-in"
+                        amount = p.score
+                    else:
+                        action = "bet"
+
+                # Validation
+                if answer and answer not in ("A", "B", "C", "D"):
+                    return
+                if action not in ("check", "bet", "all-in"):
+                    action = "check"
+                amount = max(0, min(int(amount), p.score))
+                if action == "all-in":
+                    amount = p.score
+                if action == "check":
+                    amount = 0
+
+                if answer:
+                    p.answer = answer
+                p.action = action
+                p.bet_amount = amount
 
 
         def all_players_bet(self) -> bool:
@@ -212,11 +249,13 @@ def create_app() -> Flask:
             with self.lock:
                 if self.phase != "question":
                     return False
-                for p in self.players.values():
-                    # Si p.bets est vide ou toutes les mises sont à 0, le joueur n'a pas misé
-                    if not p.bets or sum(p.bets.values()) == 0:
+                active = [p for p in self.players.values() if not p.eliminated]
+                if not active:
+                    return False
+                for p in active:
+                    if p.answer is None or p.action is None:
                         return False
-                return len(self.players) > 0  # Au moins un joueur et tous ont misé
+                return True
 
         def validate(self) -> None:
             with self.lock:
@@ -230,27 +269,36 @@ def create_app() -> Flask:
 
                 # Calculer les gains/pertes pour chaque joueur
                 for p in self.players.values():
-                    # Ignorer les joueurs déjà éliminés
                     if p.eliminated:
                         p.is_correct = None
                         continue
-                    
-                    # Si le joueur n'a pas misé (p.bets vide ou tout à 0), il perd tout son capital
-                    if not p.bets or sum(p.bets.values()) == 0:
-                        p.score = 0
-                        p.is_correct = False
+
+                    bank_before = p.score
+                    action = p.action or "check"
+                    amount = max(0, min(p.bet_amount or 0, bank_before))
+                    answer = (p.answer or "").upper()[:1]
+                    correct_answer = answer == self.correct
+
+                    delta = 0
+                    if action == "check":
+                        delta = 0
+                    elif action == "bet":
+                        delta = int(-amount + amount * 1.25) if correct_answer else -amount
+                    elif action == "all-in":
+                        delta = int(bank_before * 1.25) if correct_answer else -bank_before
                     else:
-                        correct_bet = p.bets.get(self.correct, 0)
-                        # Le joueur garde UNIQUEMENT sa mise correcte (les jetons non misés sont perdus)
-                        p.score = correct_bet
-                        p.is_correct = correct_bet > 0
+                        delta = 0
+
+                    p.score += delta
+                    p.is_correct = bool(correct_answer) if action != "check" else None
 
                     # Si capital = 0 → défaite totale
                     if p.score <= 0:
                         p.eliminated = True
                         p.score = 0
-                        p.bets = {"A": 0, "B": 0, "C": 0, "D": 0}
-                                # Prevent the eliminated player from re-joining as an active player (ban sid and ip if available)
+                        p.action = "check"
+                        p.bet_amount = 0
+                        # Prevent the eliminated player from re-joining as an active player (ban sid and ip if available)
                         try:
                             if p.sid:
                                 self.banned_sids.add(p.sid)
@@ -273,11 +321,11 @@ def create_app() -> Flask:
                 self.question_started_at = None
                 self.paused_remaining = None
                 for p in self.players.values():
-                    p.choice = None
+                    p.answer = None
                     p.is_correct = None
-                    # Ne réinitialiser les mises que si le joueur n'est pas éliminé
                     if not p.eliminated:
-                        p.bets = {"A": 0, "B": 0, "C": 0, "D": 0}
+                        p.action = "check"
+                        p.bet_amount = 0
                 self.phase = "waiting"
 
         def snapshot(self) -> Dict[str, Any]:
@@ -298,7 +346,10 @@ def create_app() -> Flask:
                             "name": p.name,
                             "score": p.score,
                             "eliminated": p.eliminated,
-                            "choice": p.choice,
+                            "answer": p.answer,
+                            "choice": p.answer,  # compat ancien front
+                            "action": p.action,
+                            "bet_amount": p.bet_amount,
                             "is_correct": p.is_correct if self.phase == "results" else None,
                             "socket_id": p.socket_id,
                         }
@@ -590,7 +641,9 @@ def create_app() -> Flask:
             return
         
         # Initialiser le jeu ET lancer automatiquement la première question
-        lobby.start_game(list(engine._questions)[:lobby.question_total])
+        qs = list(engine._questions)
+        engine._rng.shuffle(qs)  # type: ignore[attr-defined]
+        lobby.start_game(qs[: lobby.question_total])
         lobby.launch_question()
         
         # Émettre les événements dans le bon ordre : 1. game_started, 2. state, 3. new_question
@@ -846,21 +899,37 @@ def create_app() -> Flask:
         sid, game = _require_session()
         data = request.get_json(force=True, silent=True) or {}
 
-        def _to_int(x):
+        def _as_int(x, default=0):
             try:
                 return int(x)
             except Exception:
-                return 0
+                return default
 
-        bets = {
-            "A": _to_int(data.get("A", 0)),
-            "B": _to_int(data.get("B", 0)),
-            "C": _to_int(data.get("C", 0)),
-            "D": _to_int(data.get("D", 0)),
-        }
+        # Nouvelle API: action/check/bet/all-in + answer + amount
+        if "action" in data or "answer" in data:
+            answer = (data.get("answer") or "").strip().upper()
+            action = (data.get("action") or "check").strip().lower()
+            amount = _as_int(data.get("amount", 0), 0)
+        else:
+            # Compat: ancienne API par distribution des mises A/B/C/D
+            bets = {
+                "A": _as_int(data.get("A", 0), 0),
+                "B": _as_int(data.get("B", 0), 0),
+                "C": _as_int(data.get("C", 0), 0),
+                "D": _as_int(data.get("D", 0), 0),
+            }
+            bet_total = sum(bets.values())
+            # Choisir la réponse avec la mise max (fallback sur A)
+            answer = max(bets.items(), key=lambda kv: kv[1])[0] if bets else "A"
+            if bet_total <= 0:
+                action, amount = "check", 0
+            elif bet_total >= game.player.chips:
+                action, amount = "all-in", game.player.chips
+            else:
+                action, amount = "bet", min(bet_total, game.player.chips)
 
         try:
-            resolution = game.submit_bets(bets)
+            resolution = game.submit_action(answer=answer, action=action, amount=amount)
         except ValueError as e:
             return jsonify({"ok": False, "error": str(e)}), 400
 
@@ -875,12 +944,19 @@ def create_app() -> Flask:
                 "resolution": {
                     "correct": resolution.correct,
                     "correct_label": resolution.correct_label,
-                    "kept": resolution.kept,
+                    "action": resolution.action,
+                    "bet_amount": resolution.bet_amount,
+                    "delta": resolution.delta,
+                    "bank_after": resolution.bank_after,
+                    "multiplier": resolution.multiplier,
+                    "was_correct": resolution.was_correct,
                     "lost": resolution.lost,
-                    "bet_total": resolution.bet_total,
-                    "unbet": resolution.unbet,
+                    "gained": resolution.gained,
                     "explanation": resolution.explanation,
-                    "correct_bet": resolution.correct_bet,
+                    # Compat pour l'ancien front
+                    "kept": resolution.bank_after,
+                    "bet_total": resolution.bet_amount,
+                    "correct_bet": resolution.bet_amount if resolution.was_correct else 0,
                 },
                 "player": {"chips": game.player.chips},
                 "finished": bool(game.finished),

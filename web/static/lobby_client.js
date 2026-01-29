@@ -5,7 +5,7 @@
   
   let currentState = null;
   let myPlayerName = '';
-  let myChips = 10000;
+let myChips = 1000;
   let isSpectator = false;
   const MAX_TOKEN_DISPLAY = 8;
 
@@ -353,9 +353,24 @@
 
   function sendBets() {
       if (!lobbyId) return;
+      const entries = Object.entries(currentBets);
+      const [answer, topBet] = entries.reduce((best, cur) => (cur[1] > best[1] ? cur : best), ['A', 0]);
+      const sum = entries.reduce((s, [,v]) => s + (v||0), 0);
+      let action = 'bet';
+      let amount = Math.min(sum, myChips);
+      if(sum <= 0){
+        action = 'check';
+        amount = 0;
+      } else if(sum >= myChips){
+        action = 'all-in';
+        amount = myChips;
+      }
       socket.emit('player_bets', {
           lobby_id: lobbyId,
-          bets: currentBets
+          bets: currentBets,
+          action,
+          answer,
+          amount
       });
   }
 

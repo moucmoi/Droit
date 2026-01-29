@@ -66,6 +66,21 @@
         </form>
       </section>
 
+      <section class="pk-panel pk-panel-solo" aria-label="Partie solo">
+        <form class="pk-form" method="post" action="/start">
+          <div class="pk-row pk-row-between">
+            <div>
+              <label class="pk-label" for="soloName">Partie solo</label>
+              <input class="pk-input" id="soloName" name="name" required maxlength="24" placeholder="Ton pseudo" autocomplete="nickname" />
+            </div>
+            <div class="pk-solo-action">
+              <button class="pk-btn pk-btn-ghost" type="submit">Lancer</button>
+            </div>
+          </div>
+          <p class="pk-hint">7 questions, banque 1 000 € avec les règles check / mise / all-in.</p>
+        </form>
+      </section>
+
       <div class="pk-footer">Gestion du risque &bull; Lecture de certitude &bull; Decisions successives</div>
     </main>
   </div>

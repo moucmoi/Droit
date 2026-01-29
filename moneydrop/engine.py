@@ -17,20 +17,25 @@ class IO:
 
 class MoneyDropEngine:
     def __init__(self, questions: List[Question]):
+        self._rng = random.Random()
         self._questions = list(questions)
 
     def run_game(self, player_name: str, io: IO, config: GameConfig) -> GameResult:
+        """Boucle console inspirée du poker-quiz (check/mise/all-in)."""
+
         player = Player(name=player_name, chips=config.starting_chips)
         details: List[str] = []
 
-        questions = self._questions[:]
-        questions = questions[: config.question_count]
+        questions = self._questions[: config.question_count]
+        self._rng.shuffle(questions)
 
-        io.write("\n=== Money Drop ===\n")
-        io.write(f"Joueur: {player.name} | Jetons de départ: {player.chips}\n")
+        io.write("\n=== Quiz Poker ===\n")
+        io.write(f"Joueur: {player.name} | Banque de départ: {player.chips}€\n")
         io.write(
-            "Règle: vous répartissez vos jetons sur A/B/C/D. "
-            "Les jetons sur les mauvaises réponses sont perdus.\n"
+            "À chaque question, choisissez une réponse (A/B/C/D) puis une action :\n"
+            "- check : vous passez, aucun risque ni gain ;\n"
+            "- mise <montant> : si bonne réponse, vous gagnez 1,25× votre mise ; sinon vous perdez la mise ;\n"
+            "- all-in : vous engagez tout. Si bonne réponse, votre banque passe à 2,25× ; sinon vous perdez tout.\n"
         )
 
         eliminated = False
@@ -45,39 +50,47 @@ class MoneyDropEngine:
             io.write(question.prompt + "\n")
             for key in ["A", "B", "C", "D"]:
                 io.write(f"  {key}) {question.answers[key]}\n")
-            io.write(f"Jetons disponibles: {player.chips}\n")
-            io.write("Format mise: A=200 B=300 C=0 D=50 (espaces ou virgules).\n")
+            io.write(f"Banque actuelle: {player.chips}€\n")
 
-            bets = self._prompt_bets(io, player.chips)
-            bet_total = sum(bets.values())
-            unbet = player.chips - bet_total
-            if unbet > 0 and not config.allow_unbet_chips:
-                # Contrat: ici, on force l'utilisation de tous les jetons.
-                io.write("Vous devez miser tous vos jetons sur A/B/C/D.\n")
-                bets = self._prompt_bets(io, player.chips, must_use_all=True)
-                bet_total = sum(bets.values())
-                unbet = player.chips - bet_total
+            answer = self._prompt_answer(io)
+            action, amount = self._prompt_action(io, player.chips)
 
-            kept = bets[question.correct]
-            lost = bet_total - bets[question.correct]
-            player.chips = kept
-            if bets[question.correct] > 0:
+            correct = answer == question.correct
+            delta = 0
+            if action == "check":
+                delta = 0
+            elif action == "bet":
+                if correct:
+                    delta = int(-amount + amount * 1.25)  # net gain +25% sur la mise
+                else:
+                    delta = -amount
+            elif action == "all-in":
+                delta = int(player.chips * 1.25) if correct else -player.chips
+
+            player.chips += delta
+            if correct:
                 player.correct_answers += 1
 
             io.write("\nRésultat :\n")
             io.write(f"Bonne réponse: {question.correct}) {question.answers[question.correct]}\n")
             if question.explanation:
                 io.write(f"Explication: {question.explanation}\n")
-            io.write(f"Jetons misés: {bet_total} | Non misés: {unbet}\n")
-            io.write(f"Perdus: {lost} | Conservés: {kept}\n")
+            if action == "check":
+                io.write("Action: check — aucun changement.\n")
+            else:
+                io.write(f"Action: {action} | Montant: {amount}\n")
+                if delta >= 0:
+                    io.write(f"Gagné: +{delta} | Nouvelle banque: {player.chips}\n")
+                else:
+                    io.write(f"Perdu: {abs(delta)} | Nouvelle banque: {player.chips}\n")
 
             details.append(
-                f"Q{idx}: correct={question.correct} bet={bet_total} kept={kept} lost={lost}"
+                f"Q{idx}: action={action} answer={answer} correct={question.correct} delta={delta} bank={player.chips}"
             )
 
         io.write("\n" + ("=" * 60) + "\n")
         io.write(f"Fin de partie - {player.name}\n")
-        io.write(f"Jetons finaux: {player.chips}\n")
+        io.write(f"Banque finale: {player.chips}€\n")
         io.write(f"Bonnes réponses: {player.correct_answers}/{len(questions)}\n")
 
         return GameResult(
@@ -146,3 +159,36 @@ class MoneyDropEngine:
             bets[key] = value  # dernière occurrence gagne
 
         return bets
+
+    def _prompt_answer(self, io: IO) -> AnswerKey:
+        while True:
+            ans = io.read_line("Votre réponse (A/B/C/D): ").strip().upper()
+            if ans in ("A", "B", "C", "D"):
+                return ans  # type: ignore[return-value]
+            io.write("Réponse invalide. Choisissez A, B, C ou D.\n")
+
+    def _prompt_action(self, io: IO, bank: int) -> Tuple[str, int]:
+        while True:
+            raw = io.read_line("Action (check | mise <montant> | all-in): ").strip().lower()
+            if raw == "check":
+                return "check", 0
+            if raw == "all-in":
+                return "all-in", bank
+            if raw.startswith("mise"):
+                parts = raw.split()
+                if len(parts) != 2:
+                    io.write("Format attendu: mise 200\n")
+                    continue
+                try:
+                    amt = int(parts[1])
+                except ValueError:
+                    io.write("Montant invalide.\n")
+                    continue
+                if amt < 0:
+                    io.write("Montant négatif interdit.\n")
+                    continue
+                if amt > bank:
+                    io.write(f"Montant supérieur à la banque ({bank}).\n")
+                    continue
+                return "bet", amt
+            io.write("Choisissez: check, mise <montant> ou all-in.\n")

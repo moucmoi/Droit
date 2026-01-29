@@ -183,8 +183,9 @@
     }
 
     if (explEl) {
-      const expl = (state.phase === 'results' && state.explanation) ? String(state.explanation) : '';
-      if (expl) {
+      const expl = state.explanation ? String(state.explanation) : '';
+      const showExpl = !!expl && (state.phase === 'question' || state.phase === 'results' || state.phase === 'paused');
+      if (showExpl) {
         explEl.style.display = 'block';
         explEl.innerHTML = `<b>Pourquoi ?</b> ${escapeHtml(expl)}`;
       } else {

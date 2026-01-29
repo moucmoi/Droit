@@ -137,6 +137,7 @@ def create_app() -> Flask:
         lobby_id: str
         host_sid: str
         host_name: str
+        host_socket_id: Optional[str] = None
         max_players: int = 50
         time_limit: int = 30
         question_total: int = 10
@@ -218,7 +219,8 @@ def create_app() -> Flask:
                     self.phase = "finished"
                     return
                 self.correct = None
-                self.explanation = ""
+                q = self.questions[self.question_index]
+                self.explanation = getattr(q, "explanation", "") or ""
                 for p in self.players.values():
                     p.answer = None
                     p.is_correct = None
@@ -401,8 +403,9 @@ def create_app() -> Flask:
                         p.bet_amount = 0
                 self.phase = "waiting"
 
-        def snapshot(self) -> Dict[str, Any]:
+        def snapshot(self, include_explanation: bool = False) -> Dict[str, Any]:
             with self.lock:
+                show_expl = bool(include_explanation and self.explanation and self.phase in ("question", "paused", "results"))
                 return {
                     "lobby_id": self.lobby_id,
                     "phase": self.phase,
@@ -411,7 +414,7 @@ def create_app() -> Flask:
                     "question_total": len(self.questions) if self.questions else self.question_total,
                     "question": self.current_question() if self.phase in ("question", "paused", "results") else None,
                     "correct": self.correct if self.phase == "results" else None,
-                    "explanation": self.explanation if self.phase == "results" else None,
+                    "explanation": self.explanation if show_expl else None,
                     "host_sid": self.host_sid,
                     "host_name": self.host_name,
                     "players": [
@@ -620,7 +623,12 @@ def create_app() -> Flask:
 
     # Socket.IO events
     def _emit_state(lobby: RealtimeLobby) -> None:
-        socketio.emit("state", lobby.snapshot(), room=lobby.lobby_id)
+        base_state = lobby.snapshot(include_explanation=False)
+        if lobby.host_socket_id:
+            socketio.emit("state", base_state, room=lobby.lobby_id, skip_sid=lobby.host_socket_id)
+            socketio.emit("state", lobby.snapshot(include_explanation=True), to=lobby.host_socket_id)
+        else:
+            socketio.emit("state", base_state, room=lobby.lobby_id)
 
     def _is_host(lobby: RealtimeLobby) -> bool:
         return session.get("sid") == lobby.host_sid
@@ -641,7 +649,7 @@ def create_app() -> Flask:
         # Viewer/spectator: join room and receive state, without being added as an active player.
         if role in ("viewer", "spectator"):
             join_room(lobby_id)
-            emit("state", lobby.snapshot())
+            emit("state", lobby.snapshot(include_explanation=False))
             return
         
         # Pour les joueurs : utiliser le SID de session si possible pour Ã©viter les rÃ©-entrÃ©es frauduleuses
@@ -655,7 +663,7 @@ def create_app() -> Flask:
             if session_sid and session_sid == lobby.host_sid:
                 join_room(lobby_id)
                 emit("force_spectator", {"message": "Session hote detectee - mode spectateur"})
-                emit("state", lobby.snapshot())
+                emit("state", lobby.snapshot(include_explanation=False))
                 return
 
             # Si ce SID est banni (Ã©liminÃ©), forcer le spectateur
@@ -664,7 +672,7 @@ def create_app() -> Flask:
                 join_room(lobby_id)
                 emit("force_spectator", {"message": "Vous etes elimine - mode spectateur"})
                 # Envoyer l'Ã©tat courant
-                emit("state", lobby.snapshot())
+                emit("state", lobby.snapshot(include_explanation=False))
                 # Ne pas ajouter le joueur
                 return
 
@@ -679,15 +687,19 @@ def create_app() -> Flask:
             if not sid or sid != lobby.host_sid:
                 emit("error_msg", {"error": "Host uniquement"})
                 return
+            lobby.host_socket_id = socket_sid
             # Mettre Ã  jour le socket_id du host
             if sid in lobby.players:
                 lobby.players[sid].socket_id = socket_sid
             
         join_room(lobby_id)
         # Envoyer l'Ã©tat actuel du lobby au client
-        emit("state", lobby.snapshot())
+        if role == "host":
+            emit("state", lobby.snapshot(include_explanation=True))
+        else:
+            emit("state", lobby.snapshot(include_explanation=False))
         # Notifier tous les autres clients du lobby
-        socketio.emit("state", lobby.snapshot(), room=lobby_id, skip_sid=request.sid)
+        socketio.emit("state", lobby.snapshot(include_explanation=False), room=lobby_id, skip_sid=request.sid)
 
     @socketio.on("player_answer")
     def _ws_player_answer(payload):

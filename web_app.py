@@ -4,6 +4,7 @@ import eventlet
 eventlet.monkey_patch()
 
 import os
+import sys
 import secrets
 import threading
 import time
@@ -22,6 +23,27 @@ from moneydrop.session import GameSession, SessionManager, LobbyManager, LobbyPl
 
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+class _WSGILogFilter:
+    """Drop noisy BrokenPipe logs emitted by eventlet when clients abort downloads."""
+
+    def __init__(self, stream):
+        self.stream = stream
+
+    def write(self, msg: str) -> None:  # type: ignore[override]
+        if "Broken pipe" in msg or "BrokenPipeError" in msg:
+            return
+        try:
+            self.stream.write(msg)
+        except Exception:
+            pass
+
+    def flush(self) -> None:  # pragma: no cover - passthrough
+        try:
+            self.stream.flush()
+        except Exception:
+            pass
 
 
 def create_app() -> Flask:
@@ -470,7 +492,7 @@ def create_app() -> Flask:
             except Exception:
                 return default
 
-        size = _to_int(data.get("size", 2), 2)
+        size = _to_int(data.get("size", 10), 10)
         time_limit = _to_int(data.get("time_limit", 30), 30)
 
         # No validation: any password creates the room (optional room code for players)
@@ -996,8 +1018,16 @@ if __name__ == "__main__":
     app = create_app()
     host = os.environ.get("MONEYDROP_HOST", "127.0.0.1")
     port = int(os.environ.get("MONEYDROP_PORT", "8000"))
+    log_stream = _WSGILogFilter(sys.stderr)
     # Socket.IO must run the server (use the instance that registered handlers)
-    app.socketio.run(app, host=host, port=port, debug=True, use_reloader=False)  # type: ignore[attr-defined]
-
+    app.socketio.run(  # type: ignore[attr-defined]
+        app,
+        host=host,
+        port=port,
+        debug=True,
+        use_reloader=False,
+        log=log_stream,
+        log_output=True,
+    )
 
 

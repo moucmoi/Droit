@@ -34,6 +34,9 @@
 
       <section id="panel-host" class="pk-panel is-active" role="tabpanel">
         <form class="pk-form" method="post" action="/lobby/create">
+          <label class="pk-label" for="hostName">Pseudo hôte</label>
+          <input class="pk-input" id="hostName" name="name" type="text" maxlength="24" placeholder="Ex: Croupier" autocomplete="nickname" />
+
           <label class="pk-label" for="hostPassword">Mot de passe du salon</label>
           <input class="pk-input" id="hostPassword" name="password" type="password" required placeholder="Code prive" autocomplete="off" />
 
@@ -63,6 +66,21 @@
 
           <button class="pk-btn pk-btn-primary" type="submit">Rejoindre la table</button>
           <p class="pk-hint">Demande le code a l'hote.</p>
+        </form>
+      </section>
+
+      <section class="pk-panel pk-panel-solo" aria-label="Partie solo">
+        <form class="pk-form" method="post" action="/start">
+          <div class="pk-row pk-row-between">
+            <div>
+              <label class="pk-label" for="soloName">Partie solo</label>
+              <input class="pk-input" id="soloName" name="name" required maxlength="24" placeholder="Ton pseudo" autocomplete="nickname" />
+            </div>
+            <div class="pk-solo-action">
+              <button class="pk-btn pk-btn-ghost" type="submit">Lancer</button>
+            </div>
+          </div>
+          <p class="pk-hint">7 questions, banque 1 000 € avec les règles check / mise / all-in.</p>
         </form>
       </section>
 

@@ -96,7 +96,7 @@ class GameSession:
             multiplier = 0.0
             delta = 0
         elif action == "bet":
-            multiplier = 1.25
+            multiplier = 1.6
             delta = int(-amount + amount * multiplier) if correct else -amount
         else:  # all-in
             multiplier = 2.25
@@ -308,7 +308,7 @@ class Lobby:
             if action == "check":
                 delta = 0
             elif action == "bet":
-                delta = int(-amount + amount * 1.25) if correct else -amount
+                delta = int(-amount + amount * 1.6) if correct else -amount
             elif action == "all-in":
                 delta = int(bank_before * 1.25) if correct else -bank_before
             else:

@@ -34,7 +34,7 @@ class MoneyDropEngine:
         io.write(
             "À chaque question, choisissez une réponse (A/B/C/D) puis une action :\n"
             "- check : vous passez, aucun risque ni gain ;\n"
-            "- mise <montant> : si bonne réponse, vous gagnez 1,25× votre mise ; sinon vous perdez la mise ;\n"
+            "- mise <montant> : si bonne réponse, vous gagnez 1,6× votre mise ; sinon vous perdez la mise ;\n"
             "- all-in : vous engagez tout. Si bonne réponse, votre banque passe à 2,25× ; sinon vous perdez tout.\n"
         )
 
@@ -61,7 +61,7 @@ class MoneyDropEngine:
                 delta = 0
             elif action == "bet":
                 if correct:
-                    delta = int(-amount + amount * 1.25)  # net gain +25% sur la mise
+                    delta = int(-amount + amount * 1.6)  # net gain +60% sur la mise
                 else:
                     delta = -amount
             elif action == "all-in":

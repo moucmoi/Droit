@@ -356,7 +356,7 @@ def create_app() -> Flask:
                     if action == "check":
                         delta = 0
                     elif action == "bet":
-                        delta = int(-amount + amount * 1.25) if correct_answer else -amount
+                        delta = int(-amount + amount * 1.6) if correct_answer else -amount
                     elif action == "all-in":
                         delta = int(bank_before * 1.25) if correct_answer else -bank_before
                     else:

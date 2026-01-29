@@ -1,98 +1,75 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Podium final - Gabarit</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='cinematic.css') }}" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='resolution.css') }}" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='podium_final.css') }}" />
+  <title>Podium - QCM Poker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=pk5" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='podium_final.css') }}?v=pk5" />
 </head>
-<body class="md-bg podium-final-page">
-  <div id="cineOverlay" class="cine-overlay" aria-hidden="true"></div>
+<body class="md-bg pk-play-bg pk-podium">
+  <div class="pk-podium-overlay" aria-hidden="true"></div>
 
-  <div class="md-ambient" aria-hidden="true">
-    <div class="md-blob md-blob-a"></div>
-    <div class="md-blob md-blob-b"></div>
-  </div>
-
-  <div class="podium-wrapper">
-    <header class="podium-header">
-      <div class="podium-title-container">
-        <h1 class="podium-main-title"></h1>
-        <p class="podium-subtitle"></p>
+  <div class="pk-podium-shell">
+    <header class="pk-podium-header">
+      <div class="pk-podium-brand">
+        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo" class="pk-podium-logo" />
+        <div>
+          <div class="pk-podium-title">Podium final</div>
+          <div class="pk-podium-sub">Top 3 de la table</div>
+        </div>
       </div>
+      <a class="md-btn md-btn-ghost" href="/">Accueil</a>
     </header>
 
-    <main class="podium-main">
-      <!-- Podium animé -->
-      <div class="podium-stage">
-        <!-- 2ème place -->
-        <div class="podium-position pos-2">
-          <div class="position-player">
-            <div class="player-avatar">👤</div>
-            <div class="player-info">
-              <div class="player-rank">2ème</div>
-              <div class="player-name" id="rank2Name">--</div>
-              <div class="player-score" id="rank2Score">0 €</div>
+    <main class="pk-podium-main">
+      <section class="pk-podium-stage" aria-label="Podium">
+        <div class="pk-podium-spot pk-spot-2">
+          <div class="pk-spot-rank">2</div>
+          <div class="pk-spot-card">
+            <div class="pk-spot-name" id="rank2Name">--</div>
+            <div class="pk-spot-score">
+              <span id="rank2Score">0</span>
+              <img class="pk-chip" src="{{ url_for('static', filename='assets/podium/chip.png') }}" alt="Jeton" />
             </div>
-          </div>
-          <div class="position-base">
-            <span class="position-medal">🥈</span>
           </div>
         </div>
 
-        <!-- 1ère place (champion) -->
-        <div class="podium-position pos-1">
-          <div class="position-player champion">
-            <div class="player-avatar">👤</div>
-            <div class="player-info">
-              <div class="player-rank">CHAMPION</div>
-              <div class="player-name" id="rank1Name">--</div>
-              <div class="player-score" id="rank1Score">0 €</div>
+        <div class="pk-podium-spot pk-spot-1">
+          <div class="pk-spot-rank pk-spot-rank-1">1</div>
+          <div class="pk-spot-card pk-spot-card-1">
+            <img class="pk-winner-mark" src="{{ url_for('static', filename='assets/podium/winner_mark.png') }}" alt="" aria-hidden="true" />
+            <div class="pk-spot-name" id="rank1Name">--</div>
+            <div class="pk-spot-score">
+              <span id="rank1Score">0</span>
+              <img class="pk-chip" src="{{ url_for('static', filename='assets/podium/chip.png') }}" alt="Jeton" />
             </div>
-          </div>
-          <div class="position-base">
-            <span class="position-medal">🥇</span>
+            <div class="pk-spot-badge">Champion</div>
           </div>
         </div>
 
-        <!-- 3ème place -->
-        <div class="podium-position pos-3">
-          <div class="position-player">
-            <div class="player-avatar">👤</div>
-            <div class="player-info">
-              <div class="player-rank">3ème</div>
-              <div class="player-name" id="rank3Name">--</div>
-              <div class="player-score" id="rank3Score">0 €</div>
+        <div class="pk-podium-spot pk-spot-3">
+          <div class="pk-spot-rank">3</div>
+          <div class="pk-spot-card">
+            <div class="pk-spot-name" id="rank3Name">--</div>
+            <div class="pk-spot-score">
+              <span id="rank3Score">0</span>
+              <img class="pk-chip" src="{{ url_for('static', filename='assets/podium/chip.png') }}" alt="Jeton" />
             </div>
           </div>
-          <div class="position-base">
-            <span class="position-medal">🥉</span>
-          </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Classement complet -->
-      <div class="full-ranking">
-        <h2>Classement Complet</h2>
-        <div class="ranking-list" id="rankingList"></div>
-      </div>
+      <div class="pk-podium-note" id="podiumNote">En attente de la fin de partie...</div>
 
-      <!-- Confettis -->
-      <div class="confetti-container" id="confettiContainer"></div>
-
-      <!-- Bouton retour -->
-      <div class="podium-actions">
-        <button class="btn-menu" onclick="window.location.href='/menu'">↩️ Retour au menu</button>
-      </div>
+      <audio id="victoryAudio" preload="auto" src="{{ url_for('static', filename='assets/podium/victory.mp3') }}"></audio>
     </main>
   </div>
 
-  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-  <script src="{{ url_for('static', filename='cinematic.js') }}"></script>
-  <script src="{{ url_for('static', filename='resolution.js') }}"></script>
-  <script src="{{ url_for('static', filename='podium_final.js') }}"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="{{ url_for('static', filename='podium_final.js') }}?v=pk5"></script>
 </body>
 </html>

@@ -1,31 +1,145 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Page d'accueil à personnaliser</title>
+  <title>QCM Poker - Accueil</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
-</head>
-<body class="md-bg md-home-bg">
-  <div class="md-home-ambient"></div>
-  <div class="md-home-shell">
-    <header class="md-home-hero">
-      <img src="{{ url_for('static', filename='placeholder.png') }}" alt="Logo à insérer" class="md-home-logo" />
-      <div class="md-home-title" contenteditable="false"></div>
-      <div class="md-home-subtitle" contenteditable="false"></div>
-    </header>
-    <main class="md-home-main">
-      <div class="md-home-card">
-        <a href="/menu" class="md-menu-btn">Entrer dans le menu</a>
+<body class="pk-bg">
+  <div class="pk-overlay" aria-hidden="true"></div>
+  <div class="pk-stage">
+    <header class="pk-header">
+      <div class="pk-brand">
+        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo" class="pk-logo" />
+        <div>
+          <div class="pk-brand-title">QCM Droit</div>
+          <div class="pk-brand-sub">Droit d'auteur</div>
+        </div>
       </div>
+      <div class="pk-suits" aria-hidden="true">&spades; &hearts; &diams; &clubs;</div>
+    </header>
+
+    <main class="pk-card">
+      <h1 class="pk-title">Tu veux h&eacute;berger ou rejoindre&nbsp;?</h1>
+      <p class="pk-lead"></p>
+
+      <div class="pk-tabs" role="tablist" aria-label="Choisir un mode">
+        <button class="pk-tab is-active" type="button" data-target="host" role="tab" aria-selected="true">H&eacute;berger</button>
+        <button class="pk-tab" type="button" data-target="join" role="tab" aria-selected="false">Rejoindre</button>
+      </div>
+
+      <section id="panel-host" class="pk-panel is-active" role="tabpanel">
+        <form id="hostForm" class="pk-form" method="post" action="/lobby/create">
+          <!-- Not shown, but keeps backend-compatible payload -->
+          <input type="hidden" name="name" value="Hote" />
+
+          <div class="pk-row">
+            <div>
+              <label class="pk-label" for="hostSize">Joueurs max</label>
+              <input class="pk-input" id="hostSize" name="size" type="number" min="2" max="50" value="{{ host_size|default('6') }}" />
+            </div>
+            <div>
+              <label class="pk-label" for="hostTimer">Temps / question</label>
+              <input class="pk-input" id="hostTimer" name="time_limit" type="number" min="5" max="120" value="{{ host_time_limit|default('30') }}" />
+            </div>
+          </div>
+
+          <button class="pk-btn pk-btn-primary" type="submit">Creer le salon</button>
+          <p class="pk-hint">Tu deviens le croupier de la partie.</p>
+        </form>
+      </section>
+
+      <section id="panel-join" class="pk-panel" role="tabpanel">
+        <form class="pk-form" method="post" action="/lobby/join">
+          <label class="pk-label" for="joinName">Pseudo</label>
+          <input class="pk-input" id="joinName" name="name" required placeholder="Ex: Sam" autocomplete="nickname" />
+
+          <label class="pk-label" for="joinCode">Code du salon</label>
+          <input class="pk-input" id="joinCode" name="lobby_id" required placeholder="Ex: aB12cdEF" autocomplete="off" />
+
+          <button class="pk-btn pk-btn-primary" type="submit">Rejoindre la table</button>
+          <p class="pk-hint">Demande le code a l'hote.</p>
+        </form>
+      </section>
+
+      <section class="pk-panel pk-panel-solo" aria-label="Partie solo">
+        <form class="pk-form" method="post" action="/start">
+          <div class="pk-row pk-row-between">
+            <div>
+              <label class="pk-label" for="soloName">Partie solo</label>
+              <input class="pk-input" id="soloName" name="name" required maxlength="24" placeholder="Ton pseudo" autocomplete="nickname" />
+            </div>
+            <div class="pk-solo-action">
+              <button class="pk-btn pk-btn-ghost" type="submit">Lancer</button>
+            </div>
+          </div>
+          <p class="pk-hint">7 questions, banque 1 000 € avec les règles check / mise / all-in.</p>
+        </form>
+      </section>
+
+      <div class="pk-footer">Gestion du risque &bull; Lecture de certitude &bull; Decisions successives</div>
     </main>
-    <script>
-      // Auto-redirect to /menu after a short delay
-      setTimeout(function() {
-        window.location.href = '/menu';
-      }, 1200);
-    </script>
   </div>
+
+  <script>
+    (function(){
+      const tabs = document.querySelectorAll('.pk-tab');
+      const panels = {
+        host: document.getElementById('panel-host'),
+        join: document.getElementById('panel-join')
+      };
+
+      function setActive(target){
+        tabs.forEach(btn => {
+          const isActive = btn.dataset.target === target;
+          btn.classList.toggle('is-active', isActive);
+          btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+        Object.entries(panels).forEach(([key, panel]) => {
+          if(!panel) return;
+          panel.classList.toggle('is-active', key === target);
+        });
+      }
+
+      tabs.forEach(btn => {
+        btn.addEventListener('click', () => setActive(btn.dataset.target));
+      });
+
+      const hostForm = document.getElementById('hostForm');
+      const hostError = document.getElementById('hostError');
+      if(hostForm){
+        hostForm.addEventListener('submit', async (ev) => {
+          ev.preventDefault();
+          if(hostError){ hostError.style.display = 'none'; hostError.textContent = ''; }
+
+          const fd = new FormData(hostForm);
+          const payload = {};
+          fd.forEach((v, k) => { payload[k] = String(v); });
+
+          try{
+            const r = await fetch('/lobby/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const data = await r.json().catch(() => ({}));
+            if(!r.ok || !data.ok){
+              const msg = (data && data.error === 'invalid password') ? 'Mot de passe incorrect' : (data && data.error) ? data.error : 'Erreur';
+              if(hostError){ hostError.style.display = 'block'; hostError.textContent = msg; }
+              return;
+            }
+            window.location.href = `/lobby/${encodeURIComponent(data.lobby_id)}/host`;
+          }catch(e){
+            if(hostError){ hostError.style.display = 'block'; hostError.textContent = 'Erreur de connexion'; }
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
+

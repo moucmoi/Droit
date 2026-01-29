@@ -1,9 +1,49 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import eventlet
 eventlet.monkey_patch()
 
+# eventlet's WSGI server can raise BrokenPipeError when a browser tab closes mid-response.
+# This is normal, but the default behavior dumps noisy tracebacks to the console.
+# We patch the handler to quietly ignore BrokenPipe/ConnectionReset.
+try:
+    import eventlet.wsgi  # type: ignore
+
+    _orig_handle_one_response = eventlet.wsgi.HttpProtocol.handle_one_response  # type: ignore[attr-defined]
+    _orig_log_error = getattr(eventlet.wsgi.HttpProtocol, "log_error", None)  # type: ignore[attr-defined]
+    _orig_log_message = getattr(eventlet.wsgi.HttpProtocol, "log_message", None)  # type: ignore[attr-defined]
+
+    def _quiet_handle_one_response(self):  # type: ignore[no-untyped-def]
+        try:
+            return _orig_handle_one_response(self)
+        except (BrokenPipeError, ConnectionResetError):
+            return
+
+    eventlet.wsgi.HttpProtocol.handle_one_response = _quiet_handle_one_response  # type: ignore[attr-defined]
+
+    # If a client mistakenly speaks TLS/HTTPS to our plain HTTP server, eventlet prints noisy 400 logs with binary data.
+    # Silence those (the connection is rejected anyway).
+    def _quiet_log_error(self, format, *args):  # type: ignore[no-untyped-def]
+        try:
+            msg = str(format) % args if args else str(format)
+        except Exception:
+            msg = str(format)
+        if "Bad request version" in msg or "Bad request syntax" in msg:
+            return
+        if callable(_orig_log_error):
+            return _orig_log_error(self, format, *args)
+
+    def _quiet_log_message(self, format, *args):  # type: ignore[no-untyped-def]
+        if callable(_orig_log_message):
+            return _orig_log_message(self, format, *args)
+
+    if callable(_orig_log_error):
+        eventlet.wsgi.HttpProtocol.log_error = _quiet_log_error  # type: ignore[attr-defined]
+except Exception:
+    pass
+
 import os
+import sys
 import secrets
 import threading
 import time
@@ -22,6 +62,27 @@ from moneydrop.session import GameSession, SessionManager, LobbyManager, LobbyPl
 
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+class _WSGILogFilter:
+    """Drop noisy BrokenPipe logs emitted by eventlet when clients abort downloads."""
+
+    def __init__(self, stream):
+        self.stream = stream
+
+    def write(self, msg: str) -> None:  # type: ignore[override]
+        if "Broken pipe" in msg or "BrokenPipeError" in msg:
+            return
+        try:
+            self.stream.write(msg)
+        except Exception:
+            pass
+
+    def flush(self) -> None:  # pragma: no cover - passthrough
+        try:
+            self.stream.flush()
+        except Exception:
+            pass
 
 
 def create_app() -> Flask:
@@ -46,7 +107,7 @@ def create_app() -> Flask:
     engine = MoneyDropEngine(build_question_bank())
     sessions = SessionManager()
     lobbies = LobbyManager()
-    config = GameConfig(starting_chips=10000, question_count=7, allow_unbet_chips=True)
+    config = GameConfig(starting_chips=1000, question_count=7, allow_unbet_chips=True)
 
     create_lobby_password = os.environ.get("MONEYDROP_CREATE_PASSWORD", "Droit_Terrasse2026")
 
@@ -62,11 +123,12 @@ def create_app() -> Flask:
     class RTPlayer:
         sid: str
         name: str
-        score: int = 10000  # capital à miser (jetons)
-        choice: Optional[str] = None
+        score: int = 1000  # banque en euros
+        answer: Optional[str] = None  # réponse choisie (A/B/C/D)
+        action: str = "check"
+        bet_amount: int = 0
         is_correct: Optional[bool] = None
         eliminated: bool = False  # Défaite totale (capital=0)
-        bets: Dict[str, int] = field(default_factory=lambda: {"A": 0, "B": 0, "C": 0, "D": 0})
         socket_id: Optional[str] = None  # SocketIO session ID
         ip: Optional[str] = None  # last known IP address
 
@@ -88,11 +150,12 @@ def create_app() -> Flask:
 
         questions: list = field(default_factory=list)
         correct: Optional[str] = None
+        explanation: str = ""
         players: Dict[str, RTPlayer] = field(default_factory=dict)
         # SIDs of players who were eliminated and must not rejoin as active players
         banned_sids: set = field(default_factory=set)
 
-        # Durée de la cinématique côté client avant affichage du plateau (voir web/static/cinematic.js)
+        # DurÃ©e de la cinÃ©matique cÃ´tÃ© client avant affichage du plateau (voir web/static/cinematic.js)
         CINEMATIC_DELAY_SECONDS = 4.5  # 4s animation + 0.5s transition
 
         def add_player(self, sid: str, name: str, socket_sid: str = None, ip: Optional[str] = None) -> None:
@@ -129,20 +192,22 @@ def create_app() -> Flask:
         def start_game(self, questions: list) -> None:
             with self.lock:
                 if self.phase != "waiting":
-                    # idempotent: on n'écrase pas une partie en cours
+                    # idempotent: on n'Ã©crase pas une partie en cours
                     return
                 self.questions = list(questions)[: self.question_total]
                 self.question_index = 0
                 self.correct = None
+                self.explanation = ""
                 self.question_started_at = None
                 self.paused_remaining = None
                 for p in self.players.values():
-                    p.score = 10000  # Reset jetons
-                    p.eliminated = False  # Reset statut éliminé
-                    p.choice = None
+                    p.score = 1000  # Banque de départ
+                    p.eliminated = False
+                    p.answer = None
+                    p.action = "check"
+                    p.bet_amount = 0
                     p.is_correct = None
-                    p.bets = {"A": 0, "B": 0, "C": 0, "D": 0}
-                # Le host déclenche explicitement le lancement de question
+            # Le host déclenche explicitement le lancement de question
                 self.phase = "waiting"
 
         def launch_question(self) -> None:
@@ -153,14 +218,15 @@ def create_app() -> Flask:
                     self.phase = "finished"
                     return
                 self.correct = None
+                self.explanation = ""
                 for p in self.players.values():
-                    p.choice = None
+                    p.answer = None
                     p.is_correct = None
-                    # Ne réinitialiser les mises que si le joueur n'est pas éliminé
                     if not p.eliminated:
-                        p.bets = {"A": 0, "B": 0, "C": 0, "D": 0}
+                        p.action = "check"
+                        p.bet_amount = 0
                 self.phase = "question"
-                # Le chrono démarre après la cinématique (plateau visible)
+                # Le chrono dÃ©marre aprÃ¨s la cinÃ©matique (plateau visible)
                 self.question_started_at = time.time() + self.CINEMATIC_DELAY_SECONDS
                 self.paused_remaining = None
 
@@ -189,34 +255,79 @@ def create_app() -> Flask:
                 c = (choice or "").strip().upper()[:1]
                 if c not in ("A", "B", "C", "D"):
                     return
-                self.players[sid].choice = c
+                self.players[sid].answer = c
 
-        def place_bets(self, sid: str, bets: Dict[str, int]) -> None:
-            """Place les mises d'un joueur"""
+        def place_bets(self, sid: str, bet_payload: Dict[str, Any]) -> None:
+            """Enregistre l'action (check/mise/all-in) et la réponse choisie."""
             with self.lock:
                 if self.phase != "question":
                     return
                 if sid not in self.players:
                     return
                 p = self.players[sid]
-                # Valider les mises jetons
-                total_bet = sum(bets.get(k, 0) for k in ["A", "B", "C", "D"])
-                if total_bet > p.score:
-                    return  # Mise invalide
-                
-                p.bets = {k: bets.get(k, 0) for k in ["A", "B", "C", "D"]} 
+
+                # Parsing compat : accepter ancien format {A:200,...} ou nouveau {action,answer,amount}
+                action = None
+                answer = None
+                amount = 0
+
+                if isinstance(bet_payload, dict) and ("action" in bet_payload or "answer" in bet_payload):
+                    action = str(bet_payload.get("action", "check")).lower()
+                    raw_answer = bet_payload.get("answer", "")
+                    if raw_answer is None:
+                        raw_answer = ""
+                    answer = str(raw_answer).strip().upper()[:1] if raw_answer else ""
+                    try:
+                        amount = int(bet_payload.get("amount", 0))
+                    except Exception:
+                        amount = 0
+                else:
+                    # Ancien format : somme des mises détermine l'action
+                    bets = {k: int(bet_payload.get(k, 0)) for k in ["A", "B", "C", "D"]} if isinstance(bet_payload, dict) else {}
+                    amount = sum(bets.values())
+                    answer = max(bets.items(), key=lambda kv: kv[1])[0] if bets else p.answer
+                    if amount <= 0:
+                        action = "check"
+                    elif amount >= p.score:
+                        action = "all-in"
+                        amount = p.score
+                    else:
+                        action = "bet"
+
+                # Validation
+                if answer and answer not in ("A", "B", "C", "D"):
+                    return
+                if action not in ("check", "bet", "all-in"):
+                    action = "check"
+                amount = max(0, min(int(amount), p.score))
+                if action == "bet" and amount >= p.score:
+                    action = "all-in"
+                if action == "all-in":
+                    amount = p.score
+                if action == "check":
+                    amount = 0
+
+                if answer:
+                    p.answer = answer
+                p.action = action
+                p.bet_amount = amount
 
 
         def all_players_bet(self) -> bool:
-            """Vérifie si tous les joueurs ont misé"""
+            """VÃ©rifie si tous les joueurs ont misÃ©"""
             with self.lock:
                 if self.phase != "question":
                     return False
-                for p in self.players.values():
-                    # Si p.bets est vide ou toutes les mises sont à 0, le joueur n'a pas misé
-                    if not p.bets or sum(p.bets.values()) == 0:
+                active = [p for p in self.players.values() if not p.eliminated]
+                if not active:
+                    return False
+                for p in active:
+                    if p.action is None:
                         return False
-                return len(self.players) > 0  # Au moins un joueur et tous ont misé
+                    # "check" can be played without selecting any answer (skip/no risk).
+                    if p.action in ("bet", "all-in") and p.answer is None:
+                        return False
+                return True
 
         def validate(self) -> None:
             with self.lock:
@@ -227,35 +338,44 @@ def create_app() -> Flask:
                     return
                 q = self.questions[self.question_index]
                 self.correct = q.correct
+                self.explanation = getattr(q, "explanation", "") or ""
 
                 # Calculer les gains/pertes pour chaque joueur
                 for p in self.players.values():
-                    # Ignorer les joueurs déjà éliminés
                     if p.eliminated:
                         p.is_correct = None
                         continue
-                    
-                    # Si le joueur n'a pas misé (p.bets vide ou tout à 0), il perd tout son capital
-                    if not p.bets or sum(p.bets.values()) == 0:
-                        p.score = 0
-                        p.is_correct = False
-                    else:
-                        correct_bet = p.bets.get(self.correct, 0)
-                        # Le joueur garde UNIQUEMENT sa mise correcte (les jetons non misés sont perdus)
-                        p.score = correct_bet
-                        p.is_correct = correct_bet > 0
 
-                    # Si capital = 0 → défaite totale
+                    bank_before = p.score
+                    action = p.action or "check"
+                    amount = max(0, min(p.bet_amount or 0, bank_before))
+                    answer = (p.answer or "").upper()[:1]
+                    correct_answer = answer == self.correct
+
+                    delta = 0
+                    if action == "check":
+                        delta = 0
+                    elif action == "bet":
+                        delta = int(-amount + amount * 1.25) if correct_answer else -amount
+                    elif action == "all-in":
+                        delta = int(bank_before * 1.25) if correct_answer else -bank_before
+                    else:
+                        delta = 0
+
+                    p.score += delta
+                    p.is_correct = bool(correct_answer) if action != "check" else None
+
+                    # Si capital = 0 â†’ dÃ©faite totale
                     if p.score <= 0:
                         p.eliminated = True
                         p.score = 0
-                        p.bets = {"A": 0, "B": 0, "C": 0, "D": 0}
-                                # Prevent the eliminated player from re-joining as an active player (ban sid and ip if available)
+                        p.action = "check"
+                        p.bet_amount = 0
+                        # Prevent the eliminated player from re-joining as an active player.
+                        # IMPORTANT: do NOT ban by IP (multiple players can share the same NAT/public IP).
                         try:
                             if p.sid:
                                 self.banned_sids.add(p.sid)
-                            if getattr(p, 'ip', None):
-                                self.banned_sids.add(p.ip)
                         except Exception:
                             pass 
 
@@ -270,14 +390,15 @@ def create_app() -> Flask:
                     self.phase = "finished"
                     return
                 self.correct = None
+                self.explanation = ""
                 self.question_started_at = None
                 self.paused_remaining = None
                 for p in self.players.values():
-                    p.choice = None
+                    p.answer = None
                     p.is_correct = None
-                    # Ne réinitialiser les mises que si le joueur n'est pas éliminé
                     if not p.eliminated:
-                        p.bets = {"A": 0, "B": 0, "C": 0, "D": 0}
+                        p.action = "check"
+                        p.bet_amount = 0
                 self.phase = "waiting"
 
         def snapshot(self) -> Dict[str, Any]:
@@ -290,6 +411,7 @@ def create_app() -> Flask:
                     "question_total": len(self.questions) if self.questions else self.question_total,
                     "question": self.current_question() if self.phase in ("question", "paused", "results") else None,
                     "correct": self.correct if self.phase == "results" else None,
+                    "explanation": self.explanation if self.phase == "results" else None,
                     "host_sid": self.host_sid,
                     "host_name": self.host_name,
                     "players": [
@@ -298,7 +420,10 @@ def create_app() -> Flask:
                             "name": p.name,
                             "score": p.score,
                             "eliminated": p.eliminated,
-                            "choice": p.choice,
+                            "answer": p.answer,
+                            "choice": p.answer,  # compat ancien front
+                            "action": p.action,
+                            "bet_amount": p.bet_amount,
                             "is_correct": p.is_correct if self.phase == "results" else None,
                             "socket_id": p.socket_id,
                         }
@@ -349,11 +474,27 @@ def create_app() -> Flask:
 
     @app.get("/")
     def index():
-        return render_template("index.html")
+        # Index hosts the only "host/join" UI now, so we forward errors + form values here.
+        host_error = request.args.get("host_error")
+        try:
+            host_size = int(request.args.get("host_size", "") or 0) or None
+        except Exception:
+            host_size = None
+        try:
+            host_time_limit = int(request.args.get("host_time_limit", "") or 0) or None
+        except Exception:
+            host_time_limit = None
+
+        return render_template(
+            "index.html",
+            host_error=host_error,
+            host_size=host_size,
+            host_time_limit=host_time_limit,
+        )
 
     @app.get("/menu")
     def menu():
-        return render_template("menu.html")
+        return redirect(url_for("index"))
 
     @app.get("/api/lobbies")
     def list_lobbies():
@@ -397,19 +538,21 @@ def create_app() -> Flask:
         sid = _ensure_sid()
         name = (data.get("name") or "Host").strip()[:24]
         password = (data.get("password") or "").strip()
-        size = int(data.get("size", 2))
-        time_limit = int(data.get("time_limit", 30))
+        def _to_int(val, default):
+            try:
+                return int(val)
+            except Exception:
+                return default
 
-        if password != create_lobby_password:
-            if request.is_json:
-                return jsonify({"ok": False, "error": "invalid password"}), 403
-            # On renvoie une erreur pour affichage sous le champ
-            return render_template("menu.html", host_error="MTP incorrect", host_name=name, host_size=size, host_time_limit=time_limit)
+        size = _to_int(data.get("size", 2), 2)
+        time_limit = _to_int(data.get("time_limit", 30), 30)
+
+        # No validation: any password creates the room (optional room code for players)
 
         lobby = rt_lobbies.create(host_sid=sid, host_name=name, max_players=size, time_limit=time_limit)
-        # Stocker le nom de l'hôte en session
+        # Stocker le nom de l'hÃ´te en session
         session[f"player_name_{lobby.lobby_id}"] = name
-        return redirect(url_for("lobby_host", lobby_id=lobby.lobby_id))
+        return jsonify({"ok": True, "lobby_id": lobby.lobby_id})
 
     @app.post("/lobby/join")
     def lobby_join():
@@ -419,20 +562,20 @@ def create_app() -> Flask:
         if not lobby_id:
             if request.is_json:
                 return jsonify({"ok": False, "error": "missing lobby_id"}), 400
-            return redirect(url_for("menu", error="missing lobby_id"))
+            return redirect(url_for("index", error="missing lobby_id"))
         name = (data.get("name") or "Joueur").strip()[:24]
 
         lobby = rt_lobbies.get(lobby_id)
         if not lobby:
             if request.is_json:
                 return jsonify({"ok": False, "error": "unknown-lobby"}), 404
-            return redirect(url_for("menu", error="unknown-lobby"))
+            return redirect(url_for("index", error="unknown-lobby"))
         
         # Stocker le nom en session pour le passer au template
         session[f"player_name_{lobby_id}"] = name
         
-        # NE PAS ajouter le joueur ici - il sera ajouté via websocket
-        # pour éviter la duplication
+        # NE PAS ajouter le joueur ici - il sera ajoutÃ© via websocket
+        # pour Ã©viter la duplication
         
         if request.is_json:
             return jsonify({"ok": True, "lobby_id": lobby_id})
@@ -443,10 +586,10 @@ def create_app() -> Flask:
         _ensure_sid()
         lobby = rt_lobbies.get(lobby_id)
         if not lobby:
-            return redirect(url_for("menu", error="unknown-lobby"))
+            return redirect(url_for("index", error="unknown-lobby"))
         if session.get("sid") != lobby.host_sid:
             return redirect(url_for("lobby_client", lobby_id=lobby_id))
-        # Récupérer le nom de l'hôte depuis la session
+        # RÃ©cupÃ©rer le nom de l'hÃ´te depuis la session
         player_name = session.get(f"player_name_{lobby_id}", lobby.host_name)
         return render_template("host_dashboard.html", lobby_id=lobby_id, player_name=player_name)
 
@@ -455,8 +598,8 @@ def create_app() -> Flask:
         _ensure_sid()
         lobby = rt_lobbies.get(lobby_id)
         if not lobby:
-            return redirect(url_for("menu", error="unknown-lobby"))
-        # Récupérer le nom du joueur depuis la session
+            return redirect(url_for("index", error="unknown-lobby"))
+        # RÃ©cupÃ©rer le nom du joueur depuis la session
         player_name = session.get(f"player_name_{lobby_id}", "Joueur")
         return render_template("lobby_client.html", lobby_id=lobby_id, player_name=player_name)
 
@@ -466,9 +609,9 @@ def create_app() -> Flask:
         _ensure_sid()
         lobby = rt_lobbies.get(lobby_id)
         if not lobby:
-            return redirect(url_for("menu", error="unknown-lobby"))
+            return redirect(url_for("index", error="unknown-lobby"))
         if lobby.phase != "finished":
-            # Si pas fini, rediriger vers la page appropriée
+            # Si pas fini, rediriger vers la page appropriÃ©e
             if session.get("sid") == lobby.host_sid:
                 return redirect(url_for("lobby_host", lobby_id=lobby_id))
             else:
@@ -494,27 +637,39 @@ def create_app() -> Flask:
         if not lobby:
             emit("error_msg", {"error": "Lobby invalide"})
             return
+
+        # Viewer/spectator: join room and receive state, without being added as an active player.
+        if role in ("viewer", "spectator"):
+            join_room(lobby_id)
+            emit("state", lobby.snapshot())
+            return
         
-        # Pour les joueurs : utiliser le SID de session si possible pour éviter les ré-entrées frauduleuses
+        # Pour les joueurs : utiliser le SID de session si possible pour Ã©viter les rÃ©-entrÃ©es frauduleuses
         # (fallback sur socket id si pas de session). Pour l'host : utiliser le SID de session Flask
         if role == "player":
             session_sid = session.get("sid")
             sid = session_sid or socket_sid
 
-            # Si ce SID est banni (éliminé), forcer le spectateur
-            # Check if the player is banned by sid or IP
-            banned_ip = request.remote_addr
-            if sid in lobby.banned_sids or (banned_ip and banned_ip in lobby.banned_sids):
+            # If you're the host session, you may open the player view for observation,
+            # but you must not join as an active player (prevents "host view" leakage and cheating).
+            if session_sid and session_sid == lobby.host_sid:
+                join_room(lobby_id)
+                emit("force_spectator", {"message": "Session hote detectee - mode spectateur"})
+                emit("state", lobby.snapshot())
+                return
+
+            # Si ce SID est banni (Ã©liminÃ©), forcer le spectateur
+            if sid in lobby.banned_sids:
                 # Joindre la room mais ne pas ajouter comme joueur actif
                 join_room(lobby_id)
-                emit("force_spectator", {"message": "Vous êtes éliminé — mode spectateur"})
-                # Envoyer l'état courant
+                emit("force_spectator", {"message": "Vous etes elimine - mode spectateur"})
+                # Envoyer l'Ã©tat courant
                 emit("state", lobby.snapshot())
                 # Ne pas ajouter le joueur
                 return
 
             try:
-                lobby.add_player(sid, player_name, socket_sid)
+                lobby.add_player(sid, player_name, socket_sid, ip=request.remote_addr)
             except ValueError as e:
                 emit("error_msg", {"error": str(e)})
                 return
@@ -524,12 +679,12 @@ def create_app() -> Flask:
             if not sid or sid != lobby.host_sid:
                 emit("error_msg", {"error": "Host uniquement"})
                 return
-            # Mettre à jour le socket_id du host
+            # Mettre Ã  jour le socket_id du host
             if sid in lobby.players:
                 lobby.players[sid].socket_id = socket_sid
             
         join_room(lobby_id)
-        # Envoyer l'état actuel du lobby au client
+        # Envoyer l'Ã©tat actuel du lobby au client
         emit("state", lobby.snapshot())
         # Notifier tous les autres clients du lobby
         socketio.emit("state", lobby.snapshot(), room=lobby_id, skip_sid=request.sid)
@@ -539,12 +694,22 @@ def create_app() -> Flask:
         data = payload or {}
         lobby_id = (data.get("lobby_id") or "").strip()
         choice = data.get("choice")
-        sid = request.sid  # Utiliser socket_sid
+        sid = request.sid  # SocketIO sid
         lobby = rt_lobbies.get(lobby_id)
         if not sid or not lobby:
             emit("error_msg", {"error": "Lobby ou session invalide"})
             return
-        lobby.answer(sid, choice)
+
+        # Map socket sid -> player id key in lobby.players
+        target_sid = None
+        for pid, p in lobby.players.items():
+            if p.socket_id == sid:
+                target_sid = pid
+                break
+        if not target_sid:
+            return
+
+        lobby.answer(target_sid, choice)
         _emit_state(lobby)
 
     @socketio.on("player_bets")
@@ -552,28 +717,34 @@ def create_app() -> Flask:
         """Handler pour les mises des joueurs"""
         data = payload or {}
         lobby_id = (data.get("lobby_id") or "").strip()
-        bets = data.get("bets", {})
         sid = request.sid  # Utiliser socket_sid
         lobby = rt_lobbies.get(lobby_id)
         if not sid or not lobby:
             emit("error_msg", {"error": "Lobby ou session invalide"})
             return
             
-        # Trouver le joueur par son socket_id dans lobby.players (clé peut être autre chose que socket_id)
+        # Trouver le joueur par son socket_id dans lobby.players (clÃ© peut Ãªtre autre chose que socket_id)
         target_sid = None
         for pid, p in lobby.players.items():
             if p.socket_id == sid:
                 target_sid = pid
                 break
         
+        # Support both payload shapes:
+        # - legacy: {bets: {A:..,B:..,C:..,D:..}}
+        # - poker: {action, answer, amount}
+        bet_payload = data.get("bets", None)
+        if bet_payload is None:
+            bet_payload = {"action": data.get("action"), "answer": data.get("answer"), "amount": data.get("amount")}
+
         if target_sid:
-            lobby.place_bets(target_sid, bets)
+            lobby.place_bets(target_sid, bet_payload)
         else:
-            # Fallback (devrait pas arriver si logique de connection OK)
-            lobby.place_bets(sid, bets)
+            # Fallback (devrait not happen if join_lobby mapping is correct)
+            lobby.place_bets(sid, bet_payload)
 
         # Ne pas valider automatiquement pour laisser le temps aux joueurs de modifier leurs mises
-        # La validation se fera à la fin du timer (_ticker) ou par forcage hote
+        # La validation se fera Ã  la fin du timer (_ticker) ou par forcage hote
         
         _emit_state(lobby)
 
@@ -590,12 +761,14 @@ def create_app() -> Flask:
             return
         
         # Initialiser le jeu ET lancer automatiquement la première question
-        lobby.start_game(list(engine._questions)[:lobby.question_total])
+        qs = list(engine._questions)
+        engine._rng.shuffle(qs)  # type: ignore[attr-defined]
+        lobby.start_game(qs[: lobby.question_total])
         lobby.launch_question()
         
-        # Émettre les événements dans le bon ordre : 1. game_started, 2. state, 3. new_question
+        # Ã‰mettre les Ã©vÃ©nements dans le bon ordre : 1. game_started, 2. state, 3. new_question
         socketio.emit("game_started", {}, room=lobby_id)
-        _emit_state(lobby)  # Envoyer l'état AVANT l'animation
+        _emit_state(lobby)  # Envoyer l'Ã©tat AVANT l'animation
         socketio.emit("new_question", {}, room=lobby_id)
 
     @socketio.on("host_launch_question")
@@ -610,7 +783,7 @@ def create_app() -> Flask:
             emit("error_msg", {"error": "Host uniquement"})
             return
         lobby.launch_question()
-        # Émettre dans le bon ordre : état puis animation
+        # Ã‰mettre dans le bon ordre : Ã©tat puis animation
         _emit_state(lobby)
         socketio.emit("new_question", {}, room=lobby_id)
 
@@ -654,7 +827,7 @@ def create_app() -> Flask:
             emit("error_msg", {"error": "Host uniquement"})
             return
         lobby.validate()
-        # Émettre l'événement de révélation de la réponse
+        # Ã‰mettre l'Ã©vÃ©nement de rÃ©vÃ©lation de la rÃ©ponse
         socketio.emit(
             "reveal_answer",
             {"correct": lobby.correct, "question_index": lobby.question_index},
@@ -664,7 +837,7 @@ def create_app() -> Flask:
 
     @socketio.on("host_reveal_answer")
     def _ws_host_reveal(payload):
-        """Révéler la réponse (alias pour host_force_validate)"""
+        """RÃ©vÃ©ler la rÃ©ponse (alias pour host_force_validate)"""
         data = payload or {}
         lobby_id = (data.get("lobby_id") or "").strip()
         lobby = rt_lobbies.get(lobby_id)
@@ -674,7 +847,7 @@ def create_app() -> Flask:
         if not _is_host(lobby):
             emit("error_msg", {"error": "Host uniquement"})
             return
-        # Si le jeu est toujours en cours, valider et révéler
+        # Si le jeu est toujours en cours, valider et rÃ©vÃ©ler
         if lobby.phase == "question":
             lobby.validate()
             socketio.emit(
@@ -704,7 +877,7 @@ def create_app() -> Flask:
             _emit_state(lobby)
             socketio.emit("new_question", {}, room=lobby_id)
         else:
-            # Jeu terminé - émettre l'événement de fin
+            # Jeu terminÃ© - Ã©mettre l'Ã©vÃ©nement de fin
             _emit_state(lobby)
             socketio.emit("game_ended", {"lobby_id": lobby_id}, room=lobby_id)
 
@@ -741,7 +914,7 @@ def create_app() -> Flask:
                 for lobby in rt_lobbies.all().values():
                     if lobby.phase == "question" and (lobby.time_remaining() or 0) <= 0:
                         lobby.validate()
-                        # Émettre l'événement de révélation de la réponse
+                        # Ã‰mettre l'Ã©vÃ©nement de rÃ©vÃ©lation de la rÃ©ponse
                         socketio.emit(
                             "reveal_answer",
                             {"correct": lobby.correct, "question_index": lobby.question_index},
@@ -846,25 +1019,49 @@ def create_app() -> Flask:
         sid, game = _require_session()
         data = request.get_json(force=True, silent=True) or {}
 
-        def _to_int(x):
+        def _as_int(x, default=0):
             try:
                 return int(x)
             except Exception:
-                return 0
+                return default
 
-        bets = {
-            "A": _to_int(data.get("A", 0)),
-            "B": _to_int(data.get("B", 0)),
-            "C": _to_int(data.get("C", 0)),
-            "D": _to_int(data.get("D", 0)),
-        }
+        # Nouvelle API: action/check/bet/all-in + answer + amount
+        if "action" in data or "answer" in data:
+            answer = (data.get("answer") or "").strip().upper()
+            action = (data.get("action") or "check").strip().lower()
+            amount = _as_int(data.get("amount", 0), 0)
+            if action not in ("check", "bet", "all-in"):
+                action = "check"
+            if action == "bet" and amount >= game.player.chips:
+                action = "all-in"
+            if action == "all-in":
+                amount = game.player.chips
+            if action == "check":
+                amount = 0
+        else:
+            # Compat: ancienne API par distribution des mises A/B/C/D
+            bets = {
+                "A": _as_int(data.get("A", 0), 0),
+                "B": _as_int(data.get("B", 0), 0),
+                "C": _as_int(data.get("C", 0), 0),
+                "D": _as_int(data.get("D", 0), 0),
+            }
+            bet_total = sum(bets.values())
+            # Choisir la réponse avec la mise max (fallback sur A)
+            answer = max(bets.items(), key=lambda kv: kv[1])[0] if bets else "A"
+            if bet_total <= 0:
+                action, amount = "check", 0
+            elif bet_total >= game.player.chips:
+                action, amount = "all-in", game.player.chips
+            else:
+                action, amount = "bet", min(bet_total, game.player.chips)
 
         try:
-            resolution = game.submit_bets(bets)
+            resolution = game.submit_action(answer=answer, action=action, amount=amount)
         except ValueError as e:
             return jsonify({"ok": False, "error": str(e)}), 400
 
-        # Si fin après cette réponse : mise à jour classement
+        # Si fin aprÃ¨s cette rÃ©ponse : mise Ã  jour classement
         if game.finished or game.eliminated:
             result = game.result()
             leaderboard.update(result.player_name, result.final_chips, result.correct_answers)
@@ -875,12 +1072,19 @@ def create_app() -> Flask:
                 "resolution": {
                     "correct": resolution.correct,
                     "correct_label": resolution.correct_label,
-                    "kept": resolution.kept,
+                    "action": resolution.action,
+                    "bet_amount": resolution.bet_amount,
+                    "delta": resolution.delta,
+                    "bank_after": resolution.bank_after,
+                    "multiplier": resolution.multiplier,
+                    "was_correct": resolution.was_correct,
                     "lost": resolution.lost,
-                    "bet_total": resolution.bet_total,
-                    "unbet": resolution.unbet,
+                    "gained": resolution.gained,
                     "explanation": resolution.explanation,
-                    "correct_bet": resolution.correct_bet,
+                    # Compat pour l'ancien front
+                    "kept": resolution.bank_after,
+                    "bet_total": resolution.bet_amount,
+                    "correct_bet": resolution.bet_amount if resolution.was_correct else 0,
                 },
                 "player": {"chips": game.player.chips},
                 "finished": bool(game.finished),
@@ -902,5 +1106,14 @@ if __name__ == "__main__":
     app = create_app()
     host = os.environ.get("MONEYDROP_HOST", "127.0.0.1")
     port = int(os.environ.get("MONEYDROP_PORT", "8000"))
+    debug = os.environ.get("MONEYDROP_DEBUG", "").strip() in ("1", "true", "True", "yes", "YES")
     # Socket.IO must run the server (use the instance that registered handlers)
-    app.socketio.run(app, host=host, port=port, debug=True, use_reloader=False)  # type: ignore[attr-defined]
+    app.socketio.run(  # type: ignore[attr-defined]
+        app,
+        host=host,
+        port=port,
+        debug=debug,
+        use_reloader=False,
+        # Silence eventlet WSGI "BrokenPipe" tracebacks when clients close tabs mid-response.
+        log_output=False,
+    )

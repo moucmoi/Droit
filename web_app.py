@@ -3,6 +3,45 @@
 import eventlet
 eventlet.monkey_patch()
 
+# eventlet's WSGI server can raise BrokenPipeError when a browser tab closes mid-response.
+# This is normal, but the default behavior dumps noisy tracebacks to the console.
+# We patch the handler to quietly ignore BrokenPipe/ConnectionReset.
+try:
+    import eventlet.wsgi  # type: ignore
+
+    _orig_handle_one_response = eventlet.wsgi.HttpProtocol.handle_one_response  # type: ignore[attr-defined]
+    _orig_log_error = getattr(eventlet.wsgi.HttpProtocol, "log_error", None)  # type: ignore[attr-defined]
+    _orig_log_message = getattr(eventlet.wsgi.HttpProtocol, "log_message", None)  # type: ignore[attr-defined]
+
+    def _quiet_handle_one_response(self):  # type: ignore[no-untyped-def]
+        try:
+            return _orig_handle_one_response(self)
+        except (BrokenPipeError, ConnectionResetError):
+            return
+
+    eventlet.wsgi.HttpProtocol.handle_one_response = _quiet_handle_one_response  # type: ignore[attr-defined]
+
+    # If a client mistakenly speaks TLS/HTTPS to our plain HTTP server, eventlet prints noisy 400 logs with binary data.
+    # Silence those (the connection is rejected anyway).
+    def _quiet_log_error(self, format, *args):  # type: ignore[no-untyped-def]
+        try:
+            msg = str(format) % args if args else str(format)
+        except Exception:
+            msg = str(format)
+        if "Bad request version" in msg or "Bad request syntax" in msg:
+            return
+        if callable(_orig_log_error):
+            return _orig_log_error(self, format, *args)
+
+    def _quiet_log_message(self, format, *args):  # type: ignore[no-untyped-def]
+        if callable(_orig_log_message):
+            return _orig_log_message(self, format, *args)
+
+    if callable(_orig_log_error):
+        eventlet.wsgi.HttpProtocol.log_error = _quiet_log_error  # type: ignore[attr-defined]
+except Exception:
+    pass
+
 import os
 import secrets
 import threading
@@ -89,6 +128,7 @@ def create_app() -> Flask:
 
         questions: list = field(default_factory=list)
         correct: Optional[str] = None
+        explanation: str = ""
         players: Dict[str, RTPlayer] = field(default_factory=dict)
         # SIDs of players who were eliminated and must not rejoin as active players
         banned_sids: set = field(default_factory=set)
@@ -135,6 +175,7 @@ def create_app() -> Flask:
                 self.questions = list(questions)[: self.question_total]
                 self.question_index = 0
                 self.correct = None
+                self.explanation = ""
                 self.question_started_at = None
                 self.paused_remaining = None
                 for p in self.players.values():
@@ -155,6 +196,7 @@ def create_app() -> Flask:
                     self.phase = "finished"
                     return
                 self.correct = None
+                self.explanation = ""
                 for p in self.players.values():
                     p.answer = None
                     p.is_correct = None
@@ -209,7 +251,10 @@ def create_app() -> Flask:
 
                 if isinstance(bet_payload, dict) and ("action" in bet_payload or "answer" in bet_payload):
                     action = str(bet_payload.get("action", "check")).lower()
-                    answer = str(bet_payload.get("answer", "")).upper()[:1]
+                    raw_answer = bet_payload.get("answer", "")
+                    if raw_answer is None:
+                        raw_answer = ""
+                    answer = str(raw_answer).strip().upper()[:1] if raw_answer else ""
                     try:
                         amount = int(bet_payload.get("amount", 0))
                     except Exception:
@@ -233,6 +278,8 @@ def create_app() -> Flask:
                 if action not in ("check", "bet", "all-in"):
                     action = "check"
                 amount = max(0, min(int(amount), p.score))
+                if action == "bet" and amount >= p.score:
+                    action = "all-in"
                 if action == "all-in":
                     amount = p.score
                 if action == "check":
@@ -253,7 +300,10 @@ def create_app() -> Flask:
                 if not active:
                     return False
                 for p in active:
-                    if p.answer is None or p.action is None:
+                    if p.action is None:
+                        return False
+                    # "check" can be played without selecting any answer (skip/no risk).
+                    if p.action in ("bet", "all-in") and p.answer is None:
                         return False
                 return True
 
@@ -266,6 +316,7 @@ def create_app() -> Flask:
                     return
                 q = self.questions[self.question_index]
                 self.correct = q.correct
+                self.explanation = getattr(q, "explanation", "") or ""
 
                 # Calculer les gains/pertes pour chaque joueur
                 for p in self.players.values():
@@ -298,12 +349,11 @@ def create_app() -> Flask:
                         p.score = 0
                         p.action = "check"
                         p.bet_amount = 0
-                        # Prevent the eliminated player from re-joining as an active player (ban sid and ip if available)
+                        # Prevent the eliminated player from re-joining as an active player.
+                        # IMPORTANT: do NOT ban by IP (multiple players can share the same NAT/public IP).
                         try:
                             if p.sid:
                                 self.banned_sids.add(p.sid)
-                            if getattr(p, 'ip', None):
-                                self.banned_sids.add(p.ip)
                         except Exception:
                             pass 
 
@@ -318,6 +368,7 @@ def create_app() -> Flask:
                     self.phase = "finished"
                     return
                 self.correct = None
+                self.explanation = ""
                 self.question_started_at = None
                 self.paused_remaining = None
                 for p in self.players.values():
@@ -338,6 +389,7 @@ def create_app() -> Flask:
                     "question_total": len(self.questions) if self.questions else self.question_total,
                     "question": self.current_question() if self.phase in ("question", "paused", "results") else None,
                     "correct": self.correct if self.phase == "results" else None,
+                    "explanation": self.explanation if self.phase == "results" else None,
                     "host_sid": self.host_sid,
                     "host_name": self.host_name,
                     "players": [
@@ -563,6 +615,12 @@ def create_app() -> Flask:
         if not lobby:
             emit("error_msg", {"error": "Lobby invalide"})
             return
+
+        # Viewer/spectator: join room and receive state, without being added as an active player.
+        if role in ("viewer", "spectator"):
+            join_room(lobby_id)
+            emit("state", lobby.snapshot())
+            return
         
         # Pour les joueurs : utiliser le SID de session si possible pour Ã©viter les rÃ©-entrÃ©es frauduleuses
         # (fallback sur socket id si pas de session). Pour l'host : utiliser le SID de session Flask
@@ -570,20 +628,26 @@ def create_app() -> Flask:
             session_sid = session.get("sid")
             sid = session_sid or socket_sid
 
+            # If you're the host session, you may open the player view for observation,
+            # but you must not join as an active player (prevents "host view" leakage and cheating).
+            if session_sid and session_sid == lobby.host_sid:
+                join_room(lobby_id)
+                emit("force_spectator", {"message": "Session hote detectee - mode spectateur"})
+                emit("state", lobby.snapshot())
+                return
+
             # Si ce SID est banni (Ã©liminÃ©), forcer le spectateur
-            # Check if the player is banned by sid or IP
-            banned_ip = request.remote_addr
-            if sid in lobby.banned_sids or (banned_ip and banned_ip in lobby.banned_sids):
+            if sid in lobby.banned_sids:
                 # Joindre la room mais ne pas ajouter comme joueur actif
                 join_room(lobby_id)
-                emit("force_spectator", {"message": "Vous Ãªtes Ã©liminÃ© â€” mode spectateur"})
+                emit("force_spectator", {"message": "Vous etes elimine - mode spectateur"})
                 # Envoyer l'Ã©tat courant
                 emit("state", lobby.snapshot())
                 # Ne pas ajouter le joueur
                 return
 
             try:
-                lobby.add_player(sid, player_name, socket_sid)
+                lobby.add_player(sid, player_name, socket_sid, ip=request.remote_addr)
             except ValueError as e:
                 emit("error_msg", {"error": str(e)})
                 return
@@ -608,12 +672,22 @@ def create_app() -> Flask:
         data = payload or {}
         lobby_id = (data.get("lobby_id") or "").strip()
         choice = data.get("choice")
-        sid = request.sid  # Utiliser socket_sid
+        sid = request.sid  # SocketIO sid
         lobby = rt_lobbies.get(lobby_id)
         if not sid or not lobby:
             emit("error_msg", {"error": "Lobby ou session invalide"})
             return
-        lobby.answer(sid, choice)
+
+        # Map socket sid -> player id key in lobby.players
+        target_sid = None
+        for pid, p in lobby.players.items():
+            if p.socket_id == sid:
+                target_sid = pid
+                break
+        if not target_sid:
+            return
+
+        lobby.answer(target_sid, choice)
         _emit_state(lobby)
 
     @socketio.on("player_bets")
@@ -621,7 +695,6 @@ def create_app() -> Flask:
         """Handler pour les mises des joueurs"""
         data = payload or {}
         lobby_id = (data.get("lobby_id") or "").strip()
-        bets = data.get("bets", {})
         sid = request.sid  # Utiliser socket_sid
         lobby = rt_lobbies.get(lobby_id)
         if not sid or not lobby:
@@ -635,11 +708,18 @@ def create_app() -> Flask:
                 target_sid = pid
                 break
         
+        # Support both payload shapes:
+        # - legacy: {bets: {A:..,B:..,C:..,D:..}}
+        # - poker: {action, answer, amount}
+        bet_payload = data.get("bets", None)
+        if bet_payload is None:
+            bet_payload = {"action": data.get("action"), "answer": data.get("answer"), "amount": data.get("amount")}
+
         if target_sid:
-            lobby.place_bets(target_sid, bets)
+            lobby.place_bets(target_sid, bet_payload)
         else:
-            # Fallback (devrait pas arriver si logique de connection OK)
-            lobby.place_bets(sid, bets)
+            # Fallback (devrait not happen if join_lobby mapping is correct)
+            lobby.place_bets(sid, bet_payload)
 
         # Ne pas valider automatiquement pour laisser le temps aux joueurs de modifier leurs mises
         # La validation se fera Ã  la fin du timer (_ticker) ou par forcage hote
@@ -928,6 +1008,14 @@ def create_app() -> Flask:
             answer = (data.get("answer") or "").strip().upper()
             action = (data.get("action") or "check").strip().lower()
             amount = _as_int(data.get("amount", 0), 0)
+            if action not in ("check", "bet", "all-in"):
+                action = "check"
+            if action == "bet" and amount >= game.player.chips:
+                action = "all-in"
+            if action == "all-in":
+                amount = game.player.chips
+            if action == "check":
+                amount = 0
         else:
             # Compat: ancienne API par distribution des mises A/B/C/D
             bets = {
@@ -996,8 +1084,14 @@ if __name__ == "__main__":
     app = create_app()
     host = os.environ.get("MONEYDROP_HOST", "127.0.0.1")
     port = int(os.environ.get("MONEYDROP_PORT", "8000"))
+    debug = os.environ.get("MONEYDROP_DEBUG", "").strip() in ("1", "true", "True", "yes", "YES")
     # Socket.IO must run the server (use the instance that registered handlers)
-    app.socketio.run(app, host=host, port=port, debug=True, use_reloader=False)  # type: ignore[attr-defined]
-
-
-
+    app.socketio.run(  # type: ignore[attr-defined]
+        app,
+        host=host,
+        port=port,
+        debug=debug,
+        use_reloader=False,
+        # Silence eventlet WSGI "BrokenPipe" tracebacks when clients close tabs mid-response.
+        log_output=False,
+    )

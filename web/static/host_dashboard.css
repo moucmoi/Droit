@@ -340,6 +340,23 @@
   gap:12px;
 }
 
+.pkd-explanation{
+  margin-top:10px;
+  border-radius:18px;
+  border:1px solid rgba(255, 210, 120, 0.22);
+  background:linear-gradient(140deg, rgba(255, 210, 120, 0.12), rgba(9, 12, 10, 0.78));
+  padding:14px 14px;
+  color:#ffe7bf;
+  line-height:1.55;
+  font-size:14px;
+}
+
+.pkd-explanation b{
+  color:#ffd278;
+  font-weight:900;
+  letter-spacing:0.06em;
+}
+
 .pkd-answer{
   border-radius:18px;
   border:1px solid rgba(98, 240, 179, 0.18);

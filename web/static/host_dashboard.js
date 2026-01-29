@@ -1,8 +1,6 @@
-(function () {
+ï»¿(function () {
   const lobbyId = window.LOBBY_ID;
   const playerName = window.PLAYER_NAME || 'Host';
-
-  const ANSWER_KEYS = ['A', 'B', 'C', 'D'];
 
   let currentState = {
     phase: 'waiting',
@@ -32,11 +30,22 @@
     if (node) node.textContent = msg || '';
   }
 
-  // Audio (percent-encoded filename to avoid encoding issues)
+  // Tick-tock during the question phase (same audio as the client)
   const countdownMusic = new Audio('/static/musique_d%C3%A9compte.mp3');
   countdownMusic.loop = true;
-  countdownMusic.volume = 0.5;
+  countdownMusic.volume = 0.45;
   let musicPlaying = false;
+  function musicStart(){
+    if(musicPlaying) return;
+    countdownMusic.play().catch(() => {});
+    musicPlaying = true;
+  }
+  function musicStop(){
+    if(!musicPlaying) return;
+    countdownMusic.pause();
+    countdownMusic.currentTime = 0;
+    musicPlaying = false;
+  }
 
   // Socket
   const socket = io(window.location.origin, { transports: ['websocket', 'polling'] });
@@ -50,28 +59,23 @@
   socket.on('state', (state) => {
     currentState = state || currentState;
     render(currentState);
-  });
-
-  socket.on('game_ended', () => {
-    setMessage('Partie terminee. Redirection...');
-    setTimeout(() => {
-      window.location.href = `/lobby/${lobbyId}/podium?lobby_id=${encodeURIComponent(lobbyId)}`;
-    }, 1200);
+    if (currentState.phase === 'question') musicStart();
+    else musicStop();
   });
 
   socket.on('tick', (p) => {
-    const timeRemaining = (p && p.time_remaining) || 0;
     const t = el('timeRemaining');
-    if (t) t.textContent = String(timeRemaining);
+    if (t) t.textContent = String((p && p.time_remaining) || 0);
+    if (currentState.phase === 'question') musicStart();
+    else musicStop();
+  });
 
-    if (timeRemaining > 0 && currentState.phase === 'question' && !musicPlaying) {
-      countdownMusic.play().catch(() => {});
-      musicPlaying = true;
-    } else if ((timeRemaining <= 0 || currentState.phase !== 'question') && musicPlaying) {
-      countdownMusic.pause();
-      countdownMusic.currentTime = 0;
-      musicPlaying = false;
-    }
+  socket.on('game_ended', () => {
+    setMessage('Partie terminee.');
+    musicStop();
+    setTimeout(() => {
+      window.location.href = `/lobby/${lobbyId}/podium?lobby_id=${encodeURIComponent(lobbyId)}`;
+    }, 1200);
   });
 
   // Copy lobby code
@@ -87,7 +91,6 @@
     });
   }
 
-  // Render
   function render(state) {
     updatePhaseStatus(state.phase);
     updateGameInfo(state);
@@ -105,8 +108,8 @@
       waiting: { text: 'En attente', cls: 'is-waiting' },
       question: { text: 'Question', cls: 'is-question' },
       results: { text: 'Resultats', cls: 'is-results' },
-      finished: { text: 'Terminee', cls: 'is-finished' },
       paused: { text: 'Pause', cls: 'is-results' },
+      finished: { text: 'Terminee', cls: 'is-finished' },
     };
 
     const info = phaseMap[phase] || phaseMap.waiting;
@@ -122,17 +125,12 @@
     if (phaseEl) phaseEl.textContent = String(state.phase || 'waiting');
     if (qIndexEl) qIndexEl.textContent = String((state.question_index || 0) + 1);
     if (qTotalEl) qTotalEl.textContent = String(state.question_total || '-');
-
-    if (state.phase !== 'question' && musicPlaying) {
-      countdownMusic.pause();
-      countdownMusic.currentTime = 0;
-      musicPlaying = false;
-    }
   }
 
   function updateQuestion(state) {
     const qBox = el('questionBox');
     const answersEl = el('answers');
+    const explEl = el('explanationBox');
     const noQ = el('noQuestion');
 
     if (!qBox || !answersEl) return;
@@ -140,6 +138,7 @@
     if (!state.question || state.phase === 'waiting') {
       qBox.style.display = 'none';
       if (noQ) noQ.style.display = 'block';
+      if (explEl) explEl.style.display = 'none';
       return;
     }
 
@@ -151,25 +150,20 @@
     if (category) category.textContent = String(state.question.category || '');
     if (prompt) prompt.textContent = String(state.question.prompt || '');
 
-    // Total pot
     const players = state.players || [];
-    let pot = 0;
-    for (const p of players) {
-      const b = (p && p.bets) || {};
-      pot += (b.A || 0) + (b.B || 0) + (b.C || 0) + (b.D || 0);
-    }
+    const pot = players.reduce((sum, p) => sum + (p.bet_amount || 0), 0);
     const potEl = el('potTotal');
     if (potEl) potEl.textContent = String(pot);
 
     answersEl.innerHTML = '';
     const answers = (state.question && state.question.answers) || {};
 
-    for (const key of ANSWER_KEYS) {
+    for (const key of ['A', 'B', 'C', 'D']) {
       if (!answers[key]) continue;
 
-      const bettors = players.filter((p) => ((p && p.bets && p.bets[key]) || 0) > 0);
+      const bettors = players.filter((p) => (p.answer === key) && ((p.bet_amount || 0) > 0));
       const bettorsCount = bettors.length;
-      const totalMoneyBet = bettors.reduce((sum, p) => sum + ((p && p.bets && p.bets[key]) || 0), 0);
+      const totalMoneyBet = bettors.reduce((sum, p) => sum + (p.bet_amount || 0), 0);
 
       const card = document.createElement('div');
       card.className = 'pkd-answer' + (state.phase === 'results' && state.correct === key ? ' is-correct' : '');
@@ -186,6 +180,17 @@
       `;
 
       answersEl.appendChild(card);
+    }
+
+    if (explEl) {
+      const expl = (state.phase === 'results' && state.explanation) ? String(state.explanation) : '';
+      if (expl) {
+        explEl.style.display = 'block';
+        explEl.innerHTML = `<b>Pourquoi ?</b> ${escapeHtml(expl)}`;
+      } else {
+        explEl.style.display = 'none';
+        explEl.textContent = '';
+      }
     }
   }
 
@@ -223,12 +228,15 @@
       const item = document.createElement('div');
       item.className = 'pkd-player';
 
-      const choice = p.choice ? ` · choix ${escapeHtml(p.choice)}` : ' · en attente';
+      const action = p.action || 'check';
+      const amount = p.bet_amount || 0;
+      const choice = p.answer ? ` Â· ${p.answer}` : '';
+      const betTxt = action === 'check' ? 'check' : `${action} ${amount}`;
 
       item.innerHTML = `
         <div class="pkd-player-main">
           <div class="pkd-player-name">${escapeHtml(p.name || '')}</div>
-          <div class="pkd-player-sub">${p.score || 0} jetons${choice}</div>
+          <div class="pkd-player-sub">${p.score || 0} jetons Â· ${escapeHtml(betTxt)}${escapeHtml(choice)}</div>
         </div>
         <button class="pkd-kick" type="button" data-player="${escapeHtml(p.name || '')}">Kick</button>
       `;
@@ -247,7 +255,6 @@
     });
   }
 
-  // Controls
   function updateButtonsUI(state) {
     const container = el('buttonContainer');
     if (!container) return;
@@ -326,7 +333,6 @@
       return out;
     }
 
-    // Fallback
     out.push({ label: '...', className: 'pkd-btn-warn', disabled: true, onClick: () => {} });
     return out;
   }

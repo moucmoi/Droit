@@ -3,13 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Partie Multijoueur - Gabarit</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='cinematic.css') }}" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='resolution.css') }}" />
+  <title>Partie Multijoueur - QCM Poker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=pk4" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='cinematic.css') }}?v=pk4" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='resolution.css') }}?v=pk4" />
 </head>
-<body class="md-bg">
-  <!-- Overlay cinématique -->
+<body class="md-bg pk-play-bg">
   <div id="cineOverlay" class="cine-overlay" aria-hidden="true"></div>
 
   <div class="md-ambient" aria-hidden="true">
@@ -20,7 +19,7 @@
   <div class="md-shell">
     <header class="md-header">
       <div class="md-brand">
-        <img src="{{ url_for('static', filename='placeholder.png') }}" alt="Logo à définir" class="md-logo" />
+        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo" class="md-logo" />
       </div>
 
       <div class="md-header-right">
@@ -30,9 +29,8 @@
         </div>
         <div class="md-pill" id="chipsDisplay" style="display:none;">
           <span class="md-pill-label">Jetons:</span>
-          <span id="chips" class="md-pill-value md-gold">10000</span>
+          <span id="chips" class="md-pill-value md-gold">0</span>
         </div>
-
         <div class="md-pill">
           <span class="md-pill-label">Lobby:</span>
           <span class="md-pill-value">{{ lobby_id }}</span>
@@ -41,7 +39,7 @@
       </div>
     </header>
 
-    <!-- Écran d'attente du lobby -->
+    <!-- Lobby waiting -->
     <div id="lobbyWaiting" class="md-lobby-waiting">
       <div class="md-lobby-container">
         <div class="md-lobby-header">
@@ -51,8 +49,8 @@
 
         <div class="md-lobby-players">
           <div class="md-lobby-players-title">
-            <span class="md-star">★</span>
-            Joueurs connectés
+            <span class="md-star">?</span>
+            Joueurs connectes
             <span class="md-lobby-count" id="lobbyPlayerCount">0</span>
           </div>
           <div id="lobbyPlayersList" class="md-lobby-players-list"></div>
@@ -66,10 +64,10 @@
       </div>
     </div>
 
-    <!-- Écran Game Over -->
+    <!-- Game Over -->
     <div id="gameOver" class="md-game-over" style="display:none;">
       <div class="md-game-over-container">
-        <div class="md-game-over-icon"><img src="{{ url_for('static', filename='placeholder.png') }}" alt="Image à définir"></div>
+        <div class="md-game-over-icon"><img src="{{ url_for('static', filename='perdu.png') }}" alt="Perdu"></div>
         <h1 class="md-game-over-title"></h1>
         <p class="md-game-over-subtitle"></p>
         <div class="md-game-over-message">
@@ -78,7 +76,7 @@
         <div class="md-game-over-stats">
           <div class="md-game-over-stat">
             <div class="md-game-over-stat-label">Score final</div>
-            <div class="md-game-over-stat-value" id="finalScore">0 €</div>
+            <div class="md-game-over-stat-value" id="finalScore">0</div>
           </div>
         </div>
         <div class="md-game-over-actions">
@@ -87,7 +85,7 @@
       </div>
     </div>
 
-    <!-- Plateau de jeu (caché au début) -->
+    <!-- Game board -->
     <main id="gameBoard" class="md-layout" style="display:none;">
       <section class="md-main">
         <div class="md-question">
@@ -97,7 +95,7 @@
           </div>
 
           <div class="md-qtext">
-            <div id="category" class="md-qcategory">Catégorie</div>
+            <div id="category" class="md-qcategory">Categorie</div>
             <div id="prompt" class="md-qprompt">En attente du serveur...</div>
           </div>
 
@@ -110,100 +108,47 @@
           </div>
         </div>
 
-        <div class="md-board">
-          <!-- Answer cards -->
-          <div class="md-answers" role="group" aria-label="Réponses">
-            <div class="md-answer" data-key="A">
+        <div class="md-board pk-board">
+          <div class="md-answers pk-answers" role="group" aria-label="Reponses">
+            <button class="md-answer pk-answer" type="button" data-key="A">
               <div class="md-answer-letter">A</div>
               <div id="ansA" class="md-answer-text">...</div>
-              <div id="amountA" class="md-answer-amount">0 €</div>
-            </div>
-            <div class="md-answer" data-key="B">
+            </button>
+            <button class="md-answer pk-answer" type="button" data-key="B">
               <div class="md-answer-letter">B</div>
               <div id="ansB" class="md-answer-text">...</div>
-              <div id="amountB" class="md-answer-amount">0 €</div>
-            </div>
-            <div class="md-answer" data-key="C">
+            </button>
+            <button class="md-answer pk-answer" type="button" data-key="C">
               <div class="md-answer-letter">C</div>
               <div id="ansC" class="md-answer-text">...</div>
-              <div id="amountC" class="md-answer-amount">0 €</div>
-            </div>
-            <div class="md-answer" data-key="D">
+            </button>
+            <button class="md-answer pk-answer" type="button" data-key="D">
               <div class="md-answer-letter">D</div>
               <div id="ansD" class="md-answer-text">...</div>
-              <div id="amountD" class="md-answer-amount">0 €</div>
-            </div>
+            </button>
           </div>
 
-          <!-- Drop zones with +/- controls -->
-          <div class="md-zones" role="group" aria-label="Zones de mise">
-            <div class="md-zone" data-key="A">
-              <div class="md-zone-controls">
-                <input class="md-bet-input" type="number" id="inputBetA" data-key="A" min="0" step="100" placeholder="Mise" />
-              </div>
-              <div class="md-zone-stacks" id="chipsVisualA" aria-hidden="true"></div>
-              <div class="md-zone-label" id="zoneLabelA">Glissez ici</div>
-              <input id="betA" class="md-hidden" type="number" min="0" step="100" value="0" />
+          <div class="pk-action-panel">
+            <div class="pk-action-row">
+              <div class="pk-action-label">Reponse choisie</div>
+              <div class="pk-selected" id="selectedInfo">Aucune</div>
             </div>
-
-            <div class="md-zone" data-key="B">
-              <div class="md-zone-controls">
-                <input class="md-bet-input" type="number" id="inputBetB" data-key="B" min="0" step="100" placeholder="Mise" />
-              </div>
-              <div class="md-zone-stacks" id="chipsVisualB" aria-hidden="true"></div>
-              <input id="betB" class="md-hidden" type="number" min="0" step="100" value="0" />
-            </div>
-
-            <div class="md-zone" data-key="C">
-              <div class="md-zone-controls">
-                <input class="md-bet-input" type="number" id="inputBetC" data-key="C" min="0" step="100" placeholder="Mise" />
-              </div>
-              <div class="md-zone-stacks" id="chipsVisualC" aria-hidden="true"></div>
-              <div class="md-zone-label" id="zoneLabelC">Glissez ici</div>
-              <input id="betC" class="md-hidden" type="number" min="0" step="100" value="0" />
-            </div>
-
-            <div class="md-zone" data-key="D">
-              <div class="md-zone-controls">
-                <input class="md-bet-input" type="number" id="inputBetD" data-key="D" min="0" step="100" placeholder="Mise" />
-              </div>
-              <div class="md-zone-stacks" id="chipsVisualD" aria-hidden="true"></div>
-              <div class="md-zone-label" id="zoneLabelD">Glissez ici</div>
-              <input id="betD" class="md-hidden" type="number" min="0" step="100" value="0" />
-            </div>
-          </div>
-
-          <!-- Remaining tokens bar -->
-          <div class="md-money">
-            <div class="md-money-title">Jetons restants à placer</div>
-            <div id="moneyStacks" class="md-money-stacks" aria-hidden="true"></div>
-            <div class="md-money-text" style="text-align: center; font-weight: bold; margin-top: 5px;">
-                <span id="unbet">0</span> € / <span id="totalChips">0</span> €
-            </div>
-            <div class="md-money-bar" style="display: none;">
-              <div class="md-money-bar-track">
-                <div id="remainingBar" class="md-money-bar-fill"></div>
+            <div class="pk-action-row">
+              <div class="pk-action-label">Action</div>
+              <div class="pk-action-buttons" role="group">
+                <button class="pk-action-btn is-active" type="button" data-action="check">Check</button>
+                <button class="pk-action-btn" type="button" data-action="bet">Miser</button>
+                <button class="pk-action-btn" type="button" data-action="all-in">All-in</button>
               </div>
             </div>
-          </div>
-
-          <!-- Controls -->
-          <div class="md-controls">
-            <div class="md-metric">
-              <div class="md-metric-label">Total misé</div>
-              <div class="md-metric-value md-accent" id="totalBet">0</div>
-              <div class="md-metric-unit">€</div>
+            <div class="pk-bet-row">
+              <div class="pk-action-label">Montant</div>
+              <div class="pk-bet-inputs">
+                <input id="betAmount" class="pk-bet-input" type="number" min="0" step="100" value="0" />
+              </div>
             </div>
-
-            <div class="md-auto-validate-info">
-              <div class="md-auto-validate-icon">⏱️</div>
-              <div class="md-auto-validate-text">Validation automatique à la fin du temps</div>
-            </div>
-
-            <div class="md-metric">
-              <div class="md-metric-label">Non misé</div>
-              <div class="md-metric-value md-gold" id="unbetValue">0</div>
-              <div class="md-metric-unit">€</div>
+            <div class="pk-submit-row">
+              <button id="submit" class="md-btn md-btn-primary pk-submit" type="button">Valider</button>
             </div>
           </div>
 
@@ -211,14 +156,7 @@
         </div>
       </section>
 
-      <aside class="md-sidebar" aria-label="Classement">
-        <div class="md-sidebar-title">
-          <span class="md-star">★</span>
-          <span>Classement</span>
-        </div>
-        <div id="leaderboard" class="md-leaderboard"></div>
-        <div id="leaderboardFooter" class="md-leaderboard-footer"></div>
-      </aside>
+      <!-- Classement masque cote joueurs (revele uniquement a la fin) -->
     </main>
   </div>
 
@@ -228,8 +166,8 @@
     window.ROLE = "player";
     window.PLAYER_NAME = "{{ player_name }}";
   </script>
-  <script src="{{ url_for('static', filename='lobby_client.js') }}"></script>
-  <script src="{{ url_for('static', filename='cinematic.js') }}"></script>
-  <script src="{{ url_for('static', filename='resolution.js') }}"></script>
+  <script src="{{ url_for('static', filename='lobby_client.js') }}?v=pk4"></script>
+  <script src="{{ url_for('static', filename='cinematic.js') }}?v=pk4"></script>
+  <script src="{{ url_for('static', filename='resolution.js') }}?v=pk4"></script>
 </body>
 </html>

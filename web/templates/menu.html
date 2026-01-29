@@ -1,13 +1,13 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Menu (à personnaliser)</title>
+  <title>Menu (Ã  personnaliser)</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
 <body class="md-bg md-home-bg">
-  {# Ajoutez une vidéo ou une image de fond en remplaçant la balise ci-dessous #}
+  {# Ajoutez une vidÃ©o ou une image de fond en remplaÃ§ant la balise ci-dessous #}
   <!-- <video class="md-bg-video" autoplay loop muted playsinline poster="{{ url_for('static', filename='votre_poster.jpg') }}">
     <source src="{{ url_for('static', filename='votre_video.mp4') }}" type="video/mp4">
   </video> -->
@@ -25,12 +25,12 @@
         <form id="soloForm" class="form" method="post" action="/start">
           <label>Nom du joueur</label>
           <input name="name" required placeholder="Ex: Alice" autocomplete="nickname" />
-          <button class="md-menu-btn md-menu-sub" type="submit">Démarrer</button>
+          <button class="md-menu-btn md-menu-sub" type="submit">DÃ©marrer</button>
         </form>
         <button class="md-menu-btn md-menu-back" id="btnBackSolo">Retour</button>
       </div>
       <div class="md-menu-card" id="menu-multi" style="display:none">
-        <button type="button" class="md-menu-btn md-menu-sub" id="btnHost">Héberger un salon</button>
+        <button type="button" class="md-menu-btn md-menu-sub" id="btnHost">HÃ©berger un salon</button>
         <button type="button" class="md-menu-btn md-menu-sub" id="btnJoin">Rejoindre un salon</button>
         <button type="button" class="md-menu-btn md-menu-back" id="btnBackMulti">Retour</button>
       </div>
@@ -49,7 +49,7 @@
           <input name="size" type="number" min="2" max="50" value="{{ host_size|default('2') }}" />
           <label>Temps / question (sec)</label>
           <input name="time_limit" type="number" min="5" max="120" value="{{ host_time_limit|default('30') }}" />
-          <button class="md-menu-btn md-menu-sub" type="submit">Créer et lancer</button>
+          <button class="md-menu-btn md-menu-sub" type="submit">CrÃ©er et lancer</button>
         </form>
         <button class="md-menu-btn md-menu-back" id="btnBackHost">Retour</button>
       </div>
@@ -71,3 +71,4 @@
   <script src="{{ url_for('static', filename='menu.js') }}"></script>
 </body>
 </html>
+

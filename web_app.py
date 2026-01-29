@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import eventlet
 eventlet.monkey_patch()
@@ -93,7 +93,7 @@ def create_app() -> Flask:
         # SIDs of players who were eliminated and must not rejoin as active players
         banned_sids: set = field(default_factory=set)
 
-        # Durée de la cinématique côté client avant affichage du plateau (voir web/static/cinematic.js)
+        # DurÃ©e de la cinÃ©matique cÃ´tÃ© client avant affichage du plateau (voir web/static/cinematic.js)
         CINEMATIC_DELAY_SECONDS = 4.5  # 4s animation + 0.5s transition
 
         def add_player(self, sid: str, name: str, socket_sid: str = None, ip: Optional[str] = None) -> None:
@@ -130,7 +130,7 @@ def create_app() -> Flask:
         def start_game(self, questions: list) -> None:
             with self.lock:
                 if self.phase != "waiting":
-                    # idempotent: on n'écrase pas une partie en cours
+                    # idempotent: on n'Ã©crase pas une partie en cours
                     return
                 self.questions = list(questions)[: self.question_total]
                 self.question_index = 0
@@ -162,7 +162,7 @@ def create_app() -> Flask:
                         p.action = "check"
                         p.bet_amount = 0
                 self.phase = "question"
-                # Le chrono démarre après la cinématique (plateau visible)
+                # Le chrono dÃ©marre aprÃ¨s la cinÃ©matique (plateau visible)
                 self.question_started_at = time.time() + self.CINEMATIC_DELAY_SECONDS
                 self.paused_remaining = None
 
@@ -245,7 +245,7 @@ def create_app() -> Flask:
 
 
         def all_players_bet(self) -> bool:
-            """Vérifie si tous les joueurs ont misé"""
+            """VÃ©rifie si tous les joueurs ont misÃ©"""
             with self.lock:
                 if self.phase != "question":
                     return False
@@ -292,7 +292,7 @@ def create_app() -> Flask:
                     p.score += delta
                     p.is_correct = bool(correct_answer) if action != "check" else None
 
-                    # Si capital = 0 → défaite totale
+                    # Si capital = 0 â†’ dÃ©faite totale
                     if p.score <= 0:
                         p.eliminated = True
                         p.score = 0
@@ -400,11 +400,27 @@ def create_app() -> Flask:
 
     @app.get("/")
     def index():
-        return render_template("index.html")
+        # Index hosts the only "host/join" UI now, so we forward errors + form values here.
+        host_error = request.args.get("host_error")
+        try:
+            host_size = int(request.args.get("host_size", "") or 0) or None
+        except Exception:
+            host_size = None
+        try:
+            host_time_limit = int(request.args.get("host_time_limit", "") or 0) or None
+        except Exception:
+            host_time_limit = None
+
+        return render_template(
+            "index.html",
+            host_error=host_error,
+            host_size=host_size,
+            host_time_limit=host_time_limit,
+        )
 
     @app.get("/menu")
     def menu():
-        return render_template("menu.html")
+        return redirect(url_for("index"))
 
     @app.get("/api/lobbies")
     def list_lobbies():
@@ -448,19 +464,21 @@ def create_app() -> Flask:
         sid = _ensure_sid()
         name = (data.get("name") or "Host").strip()[:24]
         password = (data.get("password") or "").strip()
-        size = int(data.get("size", 2))
-        time_limit = int(data.get("time_limit", 30))
+        def _to_int(val, default):
+            try:
+                return int(val)
+            except Exception:
+                return default
 
-        if password != create_lobby_password:
-            if request.is_json:
-                return jsonify({"ok": False, "error": "invalid password"}), 403
-            # On renvoie une erreur pour affichage sous le champ
-            return render_template("menu.html", host_error="MTP incorrect", host_name=name, host_size=size, host_time_limit=time_limit)
+        size = _to_int(data.get("size", 2), 2)
+        time_limit = _to_int(data.get("time_limit", 30), 30)
+
+        # No validation: any password creates the room (optional room code for players)
 
         lobby = rt_lobbies.create(host_sid=sid, host_name=name, max_players=size, time_limit=time_limit)
-        # Stocker le nom de l'hôte en session
+        # Stocker le nom de l'hÃ´te en session
         session[f"player_name_{lobby.lobby_id}"] = name
-        return redirect(url_for("lobby_host", lobby_id=lobby.lobby_id))
+        return jsonify({"ok": True, "lobby_id": lobby.lobby_id})
 
     @app.post("/lobby/join")
     def lobby_join():
@@ -470,20 +488,20 @@ def create_app() -> Flask:
         if not lobby_id:
             if request.is_json:
                 return jsonify({"ok": False, "error": "missing lobby_id"}), 400
-            return redirect(url_for("menu", error="missing lobby_id"))
+            return redirect(url_for("index", error="missing lobby_id"))
         name = (data.get("name") or "Joueur").strip()[:24]
 
         lobby = rt_lobbies.get(lobby_id)
         if not lobby:
             if request.is_json:
                 return jsonify({"ok": False, "error": "unknown-lobby"}), 404
-            return redirect(url_for("menu", error="unknown-lobby"))
+            return redirect(url_for("index", error="unknown-lobby"))
         
         # Stocker le nom en session pour le passer au template
         session[f"player_name_{lobby_id}"] = name
         
-        # NE PAS ajouter le joueur ici - il sera ajouté via websocket
-        # pour éviter la duplication
+        # NE PAS ajouter le joueur ici - il sera ajoutÃ© via websocket
+        # pour Ã©viter la duplication
         
         if request.is_json:
             return jsonify({"ok": True, "lobby_id": lobby_id})
@@ -494,10 +512,10 @@ def create_app() -> Flask:
         _ensure_sid()
         lobby = rt_lobbies.get(lobby_id)
         if not lobby:
-            return redirect(url_for("menu", error="unknown-lobby"))
+            return redirect(url_for("index", error="unknown-lobby"))
         if session.get("sid") != lobby.host_sid:
             return redirect(url_for("lobby_client", lobby_id=lobby_id))
-        # Récupérer le nom de l'hôte depuis la session
+        # RÃ©cupÃ©rer le nom de l'hÃ´te depuis la session
         player_name = session.get(f"player_name_{lobby_id}", lobby.host_name)
         return render_template("host_dashboard.html", lobby_id=lobby_id, player_name=player_name)
 
@@ -506,8 +524,8 @@ def create_app() -> Flask:
         _ensure_sid()
         lobby = rt_lobbies.get(lobby_id)
         if not lobby:
-            return redirect(url_for("menu", error="unknown-lobby"))
-        # Récupérer le nom du joueur depuis la session
+            return redirect(url_for("index", error="unknown-lobby"))
+        # RÃ©cupÃ©rer le nom du joueur depuis la session
         player_name = session.get(f"player_name_{lobby_id}", "Joueur")
         return render_template("lobby_client.html", lobby_id=lobby_id, player_name=player_name)
 
@@ -517,9 +535,9 @@ def create_app() -> Flask:
         _ensure_sid()
         lobby = rt_lobbies.get(lobby_id)
         if not lobby:
-            return redirect(url_for("menu", error="unknown-lobby"))
+            return redirect(url_for("index", error="unknown-lobby"))
         if lobby.phase != "finished":
-            # Si pas fini, rediriger vers la page appropriée
+            # Si pas fini, rediriger vers la page appropriÃ©e
             if session.get("sid") == lobby.host_sid:
                 return redirect(url_for("lobby_host", lobby_id=lobby_id))
             else:
@@ -546,20 +564,20 @@ def create_app() -> Flask:
             emit("error_msg", {"error": "Lobby invalide"})
             return
         
-        # Pour les joueurs : utiliser le SID de session si possible pour éviter les ré-entrées frauduleuses
+        # Pour les joueurs : utiliser le SID de session si possible pour Ã©viter les rÃ©-entrÃ©es frauduleuses
         # (fallback sur socket id si pas de session). Pour l'host : utiliser le SID de session Flask
         if role == "player":
             session_sid = session.get("sid")
             sid = session_sid or socket_sid
 
-            # Si ce SID est banni (éliminé), forcer le spectateur
+            # Si ce SID est banni (Ã©liminÃ©), forcer le spectateur
             # Check if the player is banned by sid or IP
             banned_ip = request.remote_addr
             if sid in lobby.banned_sids or (banned_ip and banned_ip in lobby.banned_sids):
                 # Joindre la room mais ne pas ajouter comme joueur actif
                 join_room(lobby_id)
-                emit("force_spectator", {"message": "Vous êtes éliminé — mode spectateur"})
-                # Envoyer l'état courant
+                emit("force_spectator", {"message": "Vous Ãªtes Ã©liminÃ© â€” mode spectateur"})
+                # Envoyer l'Ã©tat courant
                 emit("state", lobby.snapshot())
                 # Ne pas ajouter le joueur
                 return
@@ -575,12 +593,12 @@ def create_app() -> Flask:
             if not sid or sid != lobby.host_sid:
                 emit("error_msg", {"error": "Host uniquement"})
                 return
-            # Mettre à jour le socket_id du host
+            # Mettre Ã  jour le socket_id du host
             if sid in lobby.players:
                 lobby.players[sid].socket_id = socket_sid
             
         join_room(lobby_id)
-        # Envoyer l'état actuel du lobby au client
+        # Envoyer l'Ã©tat actuel du lobby au client
         emit("state", lobby.snapshot())
         # Notifier tous les autres clients du lobby
         socketio.emit("state", lobby.snapshot(), room=lobby_id, skip_sid=request.sid)
@@ -610,7 +628,7 @@ def create_app() -> Flask:
             emit("error_msg", {"error": "Lobby ou session invalide"})
             return
             
-        # Trouver le joueur par son socket_id dans lobby.players (clé peut être autre chose que socket_id)
+        # Trouver le joueur par son socket_id dans lobby.players (clÃ© peut Ãªtre autre chose que socket_id)
         target_sid = None
         for pid, p in lobby.players.items():
             if p.socket_id == sid:
@@ -624,7 +642,7 @@ def create_app() -> Flask:
             lobby.place_bets(sid, bets)
 
         # Ne pas valider automatiquement pour laisser le temps aux joueurs de modifier leurs mises
-        # La validation se fera à la fin du timer (_ticker) ou par forcage hote
+        # La validation se fera Ã  la fin du timer (_ticker) ou par forcage hote
         
         _emit_state(lobby)
 
@@ -646,9 +664,9 @@ def create_app() -> Flask:
         lobby.start_game(qs[: lobby.question_total])
         lobby.launch_question()
         
-        # Émettre les événements dans le bon ordre : 1. game_started, 2. state, 3. new_question
+        # Ã‰mettre les Ã©vÃ©nements dans le bon ordre : 1. game_started, 2. state, 3. new_question
         socketio.emit("game_started", {}, room=lobby_id)
-        _emit_state(lobby)  # Envoyer l'état AVANT l'animation
+        _emit_state(lobby)  # Envoyer l'Ã©tat AVANT l'animation
         socketio.emit("new_question", {}, room=lobby_id)
 
     @socketio.on("host_launch_question")
@@ -663,7 +681,7 @@ def create_app() -> Flask:
             emit("error_msg", {"error": "Host uniquement"})
             return
         lobby.launch_question()
-        # Émettre dans le bon ordre : état puis animation
+        # Ã‰mettre dans le bon ordre : Ã©tat puis animation
         _emit_state(lobby)
         socketio.emit("new_question", {}, room=lobby_id)
 
@@ -707,7 +725,7 @@ def create_app() -> Flask:
             emit("error_msg", {"error": "Host uniquement"})
             return
         lobby.validate()
-        # Émettre l'événement de révélation de la réponse
+        # Ã‰mettre l'Ã©vÃ©nement de rÃ©vÃ©lation de la rÃ©ponse
         socketio.emit(
             "reveal_answer",
             {"correct": lobby.correct, "question_index": lobby.question_index},
@@ -717,7 +735,7 @@ def create_app() -> Flask:
 
     @socketio.on("host_reveal_answer")
     def _ws_host_reveal(payload):
-        """Révéler la réponse (alias pour host_force_validate)"""
+        """RÃ©vÃ©ler la rÃ©ponse (alias pour host_force_validate)"""
         data = payload or {}
         lobby_id = (data.get("lobby_id") or "").strip()
         lobby = rt_lobbies.get(lobby_id)
@@ -727,7 +745,7 @@ def create_app() -> Flask:
         if not _is_host(lobby):
             emit("error_msg", {"error": "Host uniquement"})
             return
-        # Si le jeu est toujours en cours, valider et révéler
+        # Si le jeu est toujours en cours, valider et rÃ©vÃ©ler
         if lobby.phase == "question":
             lobby.validate()
             socketio.emit(
@@ -757,7 +775,7 @@ def create_app() -> Flask:
             _emit_state(lobby)
             socketio.emit("new_question", {}, room=lobby_id)
         else:
-            # Jeu terminé - émettre l'événement de fin
+            # Jeu terminÃ© - Ã©mettre l'Ã©vÃ©nement de fin
             _emit_state(lobby)
             socketio.emit("game_ended", {"lobby_id": lobby_id}, room=lobby_id)
 
@@ -794,7 +812,7 @@ def create_app() -> Flask:
                 for lobby in rt_lobbies.all().values():
                     if lobby.phase == "question" and (lobby.time_remaining() or 0) <= 0:
                         lobby.validate()
-                        # Émettre l'événement de révélation de la réponse
+                        # Ã‰mettre l'Ã©vÃ©nement de rÃ©vÃ©lation de la rÃ©ponse
                         socketio.emit(
                             "reveal_answer",
                             {"correct": lobby.correct, "question_index": lobby.question_index},
@@ -933,7 +951,7 @@ def create_app() -> Flask:
         except ValueError as e:
             return jsonify({"ok": False, "error": str(e)}), 400
 
-        # Si fin après cette réponse : mise à jour classement
+        # Si fin aprÃ¨s cette rÃ©ponse : mise Ã  jour classement
         if game.finished or game.eliminated:
             result = game.result()
             leaderboard.update(result.player_name, result.final_chips, result.correct_answers)
@@ -980,3 +998,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("MONEYDROP_PORT", "8000"))
     # Socket.IO must run the server (use the instance that registered handlers)
     app.socketio.run(app, host=host, port=port, debug=True, use_reloader=False)  # type: ignore[attr-defined]
+
+
+

@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
@@ -33,21 +33,18 @@
       </div>
 
       <section id="panel-host" class="pk-panel is-active" role="tabpanel">
-        <form class="pk-form" method="post" action="/lobby/create">
-          <label class="pk-label" for="hostName">Pseudo hôte</label>
-          <input class="pk-input" id="hostName" name="name" type="text" maxlength="24" placeholder="Ex: Croupier" autocomplete="nickname" />
-
-          <label class="pk-label" for="hostPassword">Mot de passe du salon</label>
-          <input class="pk-input" id="hostPassword" name="password" type="password" required placeholder="Code prive" autocomplete="off" />
+        <form id="hostForm" class="pk-form" method="post" action="/lobby/create">
+          <!-- Not shown, but keeps backend-compatible payload -->
+          <input type="hidden" name="name" value="Hote" />
 
           <div class="pk-row">
             <div>
               <label class="pk-label" for="hostSize">Joueurs max</label>
-              <input class="pk-input" id="hostSize" name="size" type="number" min="2" max="50" value="6" />
+              <input class="pk-input" id="hostSize" name="size" type="number" min="2" max="50" value="{{ host_size|default('6') }}" />
             </div>
             <div>
               <label class="pk-label" for="hostTimer">Temps / question</label>
-              <input class="pk-input" id="hostTimer" name="time_limit" type="number" min="5" max="120" value="30" />
+              <input class="pk-input" id="hostTimer" name="time_limit" type="number" min="5" max="120" value="{{ host_time_limit|default('30') }}" />
             </div>
           </div>
 
@@ -111,7 +108,38 @@
       tabs.forEach(btn => {
         btn.addEventListener('click', () => setActive(btn.dataset.target));
       });
+
+      const hostForm = document.getElementById('hostForm');
+      const hostError = document.getElementById('hostError');
+      if(hostForm){
+        hostForm.addEventListener('submit', async (ev) => {
+          ev.preventDefault();
+          if(hostError){ hostError.style.display = 'none'; hostError.textContent = ''; }
+
+          const fd = new FormData(hostForm);
+          const payload = {};
+          fd.forEach((v, k) => { payload[k] = String(v); });
+
+          try{
+            const r = await fetch('/lobby/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const data = await r.json().catch(() => ({}));
+            if(!r.ok || !data.ok){
+              const msg = (data && data.error === 'invalid password') ? 'Mot de passe incorrect' : (data && data.error) ? data.error : 'Erreur';
+              if(hostError){ hostError.style.display = 'block'; hostError.textContent = msg; }
+              return;
+            }
+            window.location.href = `/lobby/${encodeURIComponent(data.lobby_id)}/host`;
+          }catch(e){
+            if(hostError){ hostError.style.display = 'block'; hostError.textContent = 'Erreur de connexion'; }
+          }
+        });
+      }
     })();
   </script>
 </body>
 </html>
+

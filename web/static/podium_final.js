@@ -163,7 +163,7 @@ function initPodium() {
   if (!lobbyId) {
     console.error('Pas de lobby_id dans l\'URL');
     setTimeout(() => {
-      window.location.href = '/menu';
+      window.location.href = '/';
     }, 2000);
     return;
   }

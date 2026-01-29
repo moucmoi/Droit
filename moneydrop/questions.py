@@ -4,132 +4,134 @@ from .models import Question
 
 
 def build_question_bank() -> list[Question]:
-    """Banque de questions.
+    """Question bank: Droit d'auteur (grands principes).
 
-    Exigences :
-    - 2 types : MUSIQUE et DROIT/INFORMATIQUE
-    - Les questions droit/info sont STRICTEMENT dans les thèmes fournis.
-    - Au moins une question exploite le tableau récapitulatif.
+    - 4 choices (A/B/C/D), 1 correct answer.
+    - Each question includes a short explanation for the host screen after reveal.
     """
 
-    q: list[Question] = [
-        # --- NIVEAU FACILE ---
+    return [
+        # --- FACILE ---
         Question(
-            category="DROIT/INFO",
-            prompt="En France, le CODE SOURCE d'un logiciel est protégé par :",
+            category="DROIT D'AUTEUR",
+            prompt="En droit d'auteur, qu'est-ce qui declenche la protection d'une oeuvre ?",
             answers={
-                "A": "Le Brevet industriel",
-                "B": "Le Droit d'Auteur",
-                "C": "Le Secret Défense",
-                "D": "Le Droit des Marques",
-            },
-            correct="B",
-        ),
-        Question(
-            category="DROIT/INFO",
-            prompt="Que signifie l'acronyme RGPD ?",
-            answers={
-                "A": "Règlement Global pour la Protection des Données",
-                "B": "Régime Général de la Propriété des Données",
-                "C": "Règlement Général sur la Protection des Données",
-                "D": "Registre Gouvernemental des Preuves Digitales",
+                "A": "Le depot a l'INPI",
+                "B": "La publication sur Internet",
+                "C": "L'originalite",
+                "D": "Le paiement d'une taxe",
             },
             correct="C",
+            explanation="La protection nait automatiquement si l'oeuvre est originale (empreinte de la personnalite de l'auteur). Aucun depot n'est requis. En pratique, on peut juste conserver des preuves de creation (dates, fichiers, mails) en cas de litige.",
         ),
         Question(
-            category="DROIT/INFO",
-            prompt="Le principe de 'Minimisation' (RGPD) impose de :",
+            category="DROIT D'AUTEUR",
+            prompt="Une idee (ex: 'un roman sur un magicien a l'ecole') est-elle protegee par le droit d'auteur ?",
             answers={
-                "A": "Collecter le moins de données possible",
-                "B": "Minimiser le coût du stockage",
-                "C": "Réduire la taille de la base de données",
-                "D": "Ne garder les données que 24h",
-            },
-            correct="A",
-        ),
-
-        # --- NIVEAU MOYEN ---
-        Question(
-            category="DROIT/INFO",
-            prompt="Pour protéger la STRUCTURE d'une base de données par le droit d'auteur, elle doit être :",
-            answers={
-                "A": "Volumineuse",
-                "B": "Originale",
-                "C": "Rentable",
-                "D": "Secrète",
+                "A": "Oui, toujours",
+                "B": "Non, seule la forme / l'expression est protegee",
+                "C": "Oui, si l'idee est nouvelle",
+                "D": "Oui, si l'auteur est celebre",
             },
             correct="B",
+            explanation="Le droit d'auteur protege la forme originale (texte, images, mise en forme...), pas l'idee en tant que telle. Deux personnes peuvent donc avoir la meme idee, tant qu'elles n'imitent pas la meme expression.",
         ),
         Question(
-            category="DROIT/INFO",
-            prompt="Quel droit protège l'INVESTISSEMENT financier (le contenu) d'une base de données ?",
+            category="DROIT D'AUTEUR",
+            prompt="Qui est auteur au sens du droit d'auteur ?",
             answers={
-                "A": "Le Droit Sui Generis",
-                "B": "Le Droit à l'image",
-                "C": "Le Copyright",
-                "D": "Le Droit moral",
+                "A": "Uniquement une personne physique",
+                "B": "Uniquement une personne morale (societe)",
+                "C": "Toujours l'employeur",
+                "D": "Toujours le client qui paye",
             },
             correct="A",
+            explanation="Par principe, l'auteur est une personne physique: l'humain qui cree. Les droits patrimoniaux peuvent ensuite etre cedes/licencies a une societe, mais la qualite d'auteur reste attachee a la personne.",
+        ),
+        # --- MOYEN ---
+        Question(
+            category="DROIT D'AUTEUR",
+            prompt="En France, la duree 'classique' de protection patrimoniale est de :",
+            answers={
+                "A": "25 ans apres la creation",
+                "B": "50 ans apres la publication",
+                "C": "70 ans apres la mort de l'auteur",
+                "D": "Illimitee",
+            },
+            correct="C",
+            explanation="Regle generale: 70 ans apres la mort de l'auteur. Il existe des cas particuliers (oeuvres de collaboration, posthumes, prorogations historiques), mais c'est la base a retenir.",
         ),
         Question(
-            category="DROIT/INFO",
-            prompt="Une adresse IP ou un identifiant publicitaire sont-ils des Données Personnelles (DCP) ?",
+            category="DROIT D'AUTEUR",
+            prompt="Le droit moral (en France) est en principe :",
             answers={
-                "A": "Non, jamais",
-                "B": "Oui, car ils permettent d'identifier indirectement",
-                "C": "Seulement pour les personnes célèbres",
-                "D": "Non, ce sont des données machines",
+                "A": "Cessible et limite a 10 ans",
+                "B": "Perpetuel, inalienable et imprescriptible",
+                "C": "Uniquement financier",
+                "D": "Reserve aux oeuvres publiees",
             },
             correct="B",
+            explanation="Le droit moral protege le lien auteur/oeuvre (paternite, respect de l'oeuvre, divulgation, retrait). Il est en principe perpetuel, inalienable et imprescriptible, meme si les droits patrimoniaux ont ete cedes.",
         ),
-
-        # --- NIVEAU DIFFICILE ---
         Question(
-            category="DROIT/INFO",
-            prompt="J'ai le droit de créer un logiciel qui a exactement les mêmes fonctionnalités que Excel si :",
+            category="DROIT D'AUTEUR",
+            prompt="Une cession de droits d'auteur est valable si :",
             answers={
-                "A": "Je ne copie pas le code source",
-                "B": "Je le distribue gratuitement",
-                "C": "Je change le nom du logiciel",
-                "D": "C'est strictement interdit",
+                "A": "Elle est toujours orale",
+                "B": "Elle est ecrite et precise les droits cedes (etendue/duree/territoire)",
+                "C": "Elle couvre automatiquement 'tous supports, tous pays, pour toujours'",
+                "D": "Elle est validee par un notaire",
+            },
+            correct="B",
+            explanation="En pratique, on exige un ecrit et une delimitation des droits (reproduction, representation, adaptation...), de la duree et du territoire. Une formule trop vague (\"tout, partout, pour toujours\") est risquee et peut etre contestee.",
+        ),
+        # --- DIFFICILE ---
+        Question(
+            category="DROIT D'AUTEUR",
+            prompt="La courte citation est licite si :",
+            answers={
+                "A": "On cite sans mentionner la source",
+                "B": "On cite une oeuvre non divulguee",
+                "C": "La citation est courte, justifiee par le but et la source est indiquee",
+                "D": "On cite au moins 50% de l'oeuvre",
+            },
+            correct="C",
+            explanation="Exception de citation: l'oeuvre doit etre divulguee, la citation doit etre breve et justifiee par le but (critique, analyse, enseignement...). Il faut indiquer la source et le nom de l'auteur, et ne pas remplacer l'oeuvre par la citation.",
+        ),
+        Question(
+            category="DROIT D'AUTEUR",
+            prompt="Dans une 'oeuvre collective' (ex: encyclopedie dirigee et publiee par une societe), les droits patrimoniaux appartiennent en principe :",
+            answers={
+                "A": "A chaque contributeur, uniquement",
+                "B": "A la personne (physique ou morale) sous le nom de laquelle l'oeuvre est divulguee",
+                "C": "Au premier contributeur",
+                "D": "A l'Etat",
+            },
+            correct="B",
+            explanation="Dans l'oeuvre collective, l'initiative, la direction et la publication sont assumees par une personne (souvent une societe). Les droits patrimoniaux appartiennent en principe a celle sous le nom de laquelle l'oeuvre est divulguee, meme s'il y a plusieurs contributeurs.",
+        ),
+        Question(
+            category="DROIT D'AUTEUR",
+            prompt="Une oeuvre derivee (ex: traduction, adaptation) necessite en principe :",
+            answers={
+                "A": "Aucune autorisation si elle est gratuite",
+                "B": "L'autorisation de l'auteur de l'oeuvre premiere (sauf exception)",
+                "C": "Seulement un depot a l'INPI",
+                "D": "Un simple changement de titre",
+            },
+            correct="B",
+            explanation="La traduction/adaptation exploite l'oeuvre premiere: il faut l'accord du titulaire des droits, sauf exception legale. L'auteur de l'adaptation a des droits sur sa contribution, mais pas le droit d'exploiter l'original sans autorisation.",
+        ),
+        Question(
+            category="DROIT D'AUTEUR",
+            prompt="L'exception de parodie est en principe possible si :",
+            answers={
+                "A": "Il y a une intention humoristique et pas de risque de confusion",
+                "B": "On reproduit l'oeuvre a l'identique",
+                "C": "On ne change rien mais on met 'parodie' en titre",
+                "D": "On parodie uniquement des oeuvres dans le domaine public",
             },
             correct="A",
+            explanation="La parodie suppose une intention humoristique et l'absence de confusion avec l'oeuvre premiere. Elle doit aussi rester proportionnee (pas d'abus) et ne pas detourner l'oeuvre au-dela de ce qui est necessaire a l'effet parodique.",
         ),
-        Question(
-            category="DROIT/INFO",
-            prompt="Quelle est la durée de protection du droit Sui Generis (producteur BDD) ?",
-            answers={
-                "A": "70 ans après la mort de l'auteur",
-                "B": "10 ans renouvelables",
-                "C": "15 ans à compter de l'achèvement",
-                "D": "Illimitée tant que la base existe",
-            },
-            correct="C",
-        ),
-        Question(
-            category="DROIT/INFO",
-            prompt="Stocker des mots de passe 'en clair' (non chiffrés) est une violation de l'obligation de :",
-            answers={
-                "A": "Finalité",
-                "B": "Transparence",
-                "C": "Sécurité",
-                "D": "Portabilité",
-            },
-            correct="C",
-        ),
-
-        # --- LA QUESTION QUI TUE (FINALE) ---
-        Question(
-            category="DROIT/INFO",
-            prompt="Quelle est la sanction administrative MAXIMALE possible par la CNIL ?",
-            answers={
-                "A": "300 000 €",
-                "B": "3 Millions €",
-                "C": "10 Millions € ou 2% du CA",
-                "D": "20 Millions € ou 4% du CA",
-            },
-            correct="D",
-        )
     ]
-
-    return q

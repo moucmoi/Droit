@@ -17,8 +17,6 @@ Le front est volontairement neutralisé : logos, titres, sous‑titres et imag
 
 ## Personnaliser le front
 1. Remplacez `web/static/placeholder.png` par vos visuels ou changez les `src` des images dans `web/templates/*.html`.  
-2. Ajoutez éventuellement une vidéo de fond en décommentant la balise `<video>` dans `web/templates/menu.html`.  
-3. Complétez les titres/paragraphes laissés vides dans les templates (`index.html`, `menu.html`, `lobby_client.html`, `podium_final.html`, etc.).  
 4. Si vous voulez des sons/vidéos, placez vos fichiers dans `web/static/` et ajustez les références.
 
 ## Démarrage rapide (backend inchangé)

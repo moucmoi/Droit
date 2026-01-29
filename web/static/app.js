@@ -1,4 +1,4 @@
-const ANSWER_KEYS = ['A','B','C','D'];
+﻿const ANSWER_KEYS = ['A','B','C','D'];
 const TOTAL_TIME = 60;
 const BET_STEP = 100;
 
@@ -61,10 +61,10 @@ function updateVisuals(state){
   for(const k of ANSWER_KEYS){
     const amount = b[k] || 0;
     const amountEl = $('amount'+k);
-    if(amountEl) amountEl.textContent = amount > 0 ? `${amount.toLocaleString('fr-FR')} €` : '';
+    if(amountEl) amountEl.textContent = amount > 0 ? `${amount.toLocaleString('fr-FR')} â‚¬` : '';
 
     const zoneLabel = $('zoneLabel'+k);
-    if(zoneLabel) zoneLabel.textContent = amount > 0 ? `${amount.toLocaleString('fr-FR')} €` : 'Glissez ici';
+    if(zoneLabel) zoneLabel.textContent = amount > 0 ? `${amount.toLocaleString('fr-FR')} â‚¬` : 'Glissez ici';
 
     const visual = $('chipsVisual'+k);
     if(visual){
@@ -170,7 +170,7 @@ let timerInterval = null;
 let timeRemaining = TOTAL_TIME;
 let timerQuestionIndex = null;
 
-// Cinématique: empêche de relancer l'anim sur chaque refresh
+// CinÃ©matique: empÃªche de relancer l'anim sur chaque refresh
 let cinematicQuestionIndex = null;
 
 function stopTimer(){
@@ -192,7 +192,7 @@ function startTimerForQuestion(progressIndex){
     setTimerValue(timeRemaining);
     if(timeRemaining <= 0){
       stopTimer();
-      setMessage('Temps écoulé ! Soumission automatique...');
+      setMessage('Temps Ã©coulÃ© ! Soumission automatique...');
       setTimeout(()=>{ autoSubmit().catch(()=>{}); }, 250);
     }
   }, 1000);
@@ -226,7 +226,7 @@ function renderLeaderboard(state){
         <div class="md-lb-rank ${rankClass}">${idx + 1}</div>
         <div style="flex:1; min-width:0;">
           <div class="md-lb-name">${escapeHtml(String(e.name ?? ''))}</div>
-          <div class="md-lb-sub">${correct} bonne${correct !== 1 ? 's' : ''} réponse${correct !== 1 ? 's' : ''}</div>
+          <div class="md-lb-sub">${correct} bonne${correct !== 1 ? 's' : ''} rÃ©ponse${correct !== 1 ? 's' : ''}</div>
         </div>
         <div class="md-lb-score">${chips.toLocaleString('fr-FR')}<small>jetons</small></div>
       </div>
@@ -235,7 +235,7 @@ function renderLeaderboard(state){
   });
 
   const footer = $('leaderboardFooter');
-  if(footer) footer.textContent = `${entries.length} joueurs connectés`;
+  if(footer) footer.textContent = `${entries.length} joueurs connectÃ©s`;
 }
 
 function escapeHtml(str){
@@ -260,12 +260,12 @@ function renderState(state){
   if(qCounterEl) qCounterEl.textContent = String((state?.progress?.index ?? 0) + 1);
 
   const categoryEl = $('category');
-  if(categoryEl) categoryEl.textContent = state?.question?.category ?? (state?.eliminated ? 'Éliminé' : '');
+  if(categoryEl) categoryEl.textContent = state?.question?.category ?? (state?.eliminated ? 'Ã‰liminÃ©' : '');
 
   const promptEl = $('prompt');
   if(promptEl){
     if(state?.finished || state?.eliminated || !state?.question){
-      promptEl.textContent = `Partie terminée. Jetons finaux: ${state?.result?.final_chips ?? state?.player?.chips ?? 0}`;
+      promptEl.textContent = `Partie terminÃ©e. Jetons finaux: ${state?.result?.final_chips ?? state?.player?.chips ?? 0}`;
     } else {
       promptEl.textContent = state.question.prompt;
     }
@@ -290,7 +290,7 @@ function renderState(state){
   if(state?.question && !state?.finished && !state?.eliminated){
     const idx = Number(state?.progress?.index ?? 0);
 
-    // Joue la cinématique uniquement quand la question change
+    // Joue la cinÃ©matique uniquement quand la question change
     if(window.MD_CINEMATIC && typeof window.MD_CINEMATIC.playOnce === 'function' && cinematicQuestionIndex !== idx){
       cinematicQuestionIndex = idx;
       stopTimer();
@@ -325,7 +325,7 @@ async function submit(){
 
   // Web app config currently allows unbet chips, but UI wants full distribute.
   if(sum !== (state?.player?.chips ?? 0)){
-    setMessage(`Vous devez miser tous vos jetons ! Misé: ${sum} / Disponible: ${state?.player?.chips ?? 0}`);
+    setMessage(`Vous devez miser tous vos jetons ! MisÃ©: ${sum} / Disponible: ${state?.player?.chips ?? 0}`);
     return;
   }
 
@@ -343,7 +343,7 @@ async function submit(){
   stopTimer();
 
   const res = payload.resolution;
-  // Cinématique de résolution type Money Drop
+  // CinÃ©matique de rÃ©solution type Money Drop
   if(window.MD_RESOLUTION && typeof window.MD_RESOLUTION.play === 'function'){
     try{
       await window.MD_RESOLUTION.play({ correct: res.correct, bets: b });
@@ -352,7 +352,7 @@ async function submit(){
     }
   }
 
-  // Applique les états finaux
+  // Applique les Ã©tats finaux
   document.querySelector(`.md-answer[data-key="${res.correct}"]`)?.classList.add('good');
   document.querySelector(`.md-zone[data-key="${res.correct}"]`)?.classList.add('good');
   for(const k of ANSWER_KEYS){
@@ -363,7 +363,7 @@ async function submit(){
     }
   }
 
-  setMessage(`Bonne réponse: ${res.correct}) ${res.correct_label} | Perdus: ${res.lost} | Conservés: ${res.kept}${res.explanation ? ' — ' + res.explanation : ''}`);
+  setMessage(`Bonne rÃ©ponse: ${res.correct}) ${res.correct_label} | Perdus: ${res.lost} | ConservÃ©s: ${res.kept}${res.explanation ? ' â€” ' + res.explanation : ''}`);
 
   // Refresh state for next question
   setTimeout(()=>{ refresh().catch(()=>{}); }, 650);
@@ -396,7 +396,7 @@ async function autoSubmit(){
   document.querySelector(`.md-answer[data-key="${res.correct}"]`)?.classList.add('good');
   document.querySelector(`.md-zone[data-key="${res.correct}"]`)?.classList.add('good');
 
-  setMessage(`Bonne réponse: ${res.correct}) ${res.correct_label} | Perdus: ${res.lost} | Conservés: ${res.kept}${res.explanation ? ' — ' + res.explanation : ''}`);
+  setMessage(`Bonne rÃ©ponse: ${res.correct}) ${res.correct_label} | Perdus: ${res.lost} | ConservÃ©s: ${res.kept}${res.explanation ? ' â€” ' + res.explanation : ''}`);
   setTimeout(()=>{ refresh().catch(()=>{}); }, 650);
 }
 
@@ -495,7 +495,7 @@ if(document.getElementById('btnCreate')){
     }
     const res = await postJson('/lobby/create', {size, time_limit});
     if(res.ok){
-      document.getElementById('lobbyMsg').textContent = `Salon créé: ${res.lobby_id} — attendre les joueurs...`;
+      document.getElementById('lobbyMsg').textContent = `Salon crÃ©Ã©: ${res.lobby_id} â€” attendre les joueurs...`;
       // redirect to play and store lobby_id in sessionStorage
       sessionStorage.setItem('lobby_id', res.lobby_id);
       location.href = '/play';
@@ -530,13 +530,13 @@ if(location.pathname === '/play'){
         if(!payload.ok) throw new Error('err');
         const st = payload.state;
         // show players list in leaderboard
-        $('leaderboard').textContent = st.players.map(p=>`${p.name} — ${p.chips} jetons`).join('\n');
+        $('leaderboard').textContent = st.players.map(p=>`${p.name} â€” ${p.chips} jetons`).join('\n');
 
         if(!st.started){
-          $('prompt').textContent = `En attente du démarrage... (${st.players.length}/${st.question_total || 0})`;
+          $('prompt').textContent = `En attente du dÃ©marrage... (${st.players.length}/${st.question_total || 0})`;
           // if you are creator, show start button
         } else if(st.finished){
-          $('prompt').textContent = `Partie terminée. Consultez le classement.`;
+          $('prompt').textContent = `Partie terminÃ©e. Consultez le classement.`;
         } else {
           // active question
           $('category').textContent = st.question.category;
@@ -551,7 +551,7 @@ if(location.pathname === '/play'){
             const b = bets();
             const res = await postJson('/lobby/bet', Object.assign({lobby_id}, b));
             if(!res.ok){ setMessage(`Erreur: ${res.error}`); return; }
-            setMessage('Mise envoyée. En attente des autres joueurs...');
+            setMessage('Mise envoyÃ©e. En attente des autres joueurs...');
           };
         }
       }catch(e){/* ignore */}

@@ -1806,6 +1806,16 @@ input:focus{border-color:rgba(33, 150, 243, 0.6);box-shadow:0 0 0 3px rgba(33, 1
   font-size:12px;
 }
 
+.pk-error{
+  border-radius:12px;
+  border:1px solid rgba(239, 68, 68, 0.35);
+  background:rgba(239, 68, 68, 0.14);
+  color:#ffd6d6;
+  padding:10px 12px;
+  font-weight:700;
+  font-size:13px;
+}
+
 .pk-footer{
   margin-top:18px;
   text-align:center;

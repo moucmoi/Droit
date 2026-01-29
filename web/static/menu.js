@@ -1,8 +1,8 @@
-// Menu navigation logic for Money Drop main menu
+﻿// Menu navigation logic for Money Drop main menu
 
 document.addEventListener('DOMContentLoaded', function () {
 
-  // Efface l’erreur mot de passe au focus
+  // Efface lâ€™erreur mot de passe au focus
   const hostPwdInput = document.querySelector('#menu-host input[name="password"]');
   if (hostPwdInput) {
     hostPwdInput.addEventListener('focus', function () {
@@ -109,5 +109,38 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
+  // Host form: create lobby via JSON API then redirect to host dashboard
+  const hostForm = document.getElementById('hostForm');
+  if(hostForm){
+    hostForm.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+
+      const errDiv = document.getElementById('hostPwdError');
+      if(errDiv){ errDiv.style.display = 'none'; errDiv.textContent = ''; }
+
+      const fd = new FormData(hostForm);
+      const payload = {};
+      fd.forEach((v, k) => { payload[k] = String(v); });
+
+      try{
+        const r = await fetch('/lobby/create', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        const data = await r.json().catch(() => ({}));
+        if(!r.ok || !data.ok){
+          const msg = (data && data.error === 'invalid password') ? 'Mot de passe incorrect' : (data && data.error) ? data.error : 'Erreur';
+          if(errDiv){ errDiv.style.display = ''; errDiv.textContent = msg; }
+          return;
+        }
+        window.location.href = `/lobby/${encodeURIComponent(data.lobby_id)}/host`;
+      }catch(e){
+        if(errDiv){ errDiv.style.display = ''; errDiv.textContent = 'Erreur de connexion'; }
+      }
+    });
+  }
+
   // Optionally: prevent double submit, add loading, etc.
 });
+

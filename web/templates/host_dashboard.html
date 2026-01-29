@@ -3,100 +3,102 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dashboard Hébergeur - Gabarit</title>
+  <title>QCM Poker - Tableau Hote</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='lobby.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='host_dashboard.css') }}" />
 </head>
-<body class="md-bg host-dashboard">
-  <div class="md-shell">
-    <!-- HEADER -->
-    <header class="host-header">
-      <div class="md-brand">
-        <img src="{{ url_for('static', filename='placeholder.png') }}" alt="Logo" class="md-logo" />
-      </div>
-      <div class="host-header-info">
-        <div class="md-pill">
-          <span class="md-pill-label">Lobby:</span>
-          <span class="md-pill-value" id="lobbyId">{{ lobby_id }}</span>
+<body class="pk-bg pk-dashboard">
+  <div class="pk-overlay" aria-hidden="true"></div>
+
+  <div class="pkd-shell">
+    <header class="pkd-header">
+      <div class="pkd-brand">
+        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo" class="pkd-logo" />
+        <div class="pkd-brand-text">
+          <div class="pkd-brand-title">QCM Poker</div>
+          <div class="pkd-brand-sub">Tableau hote</div>
         </div>
-        <div id="statusBadge" class="host-status-badge waiting">En attente...</div>
       </div>
-      <div class="host-header-actions">
-        <a class="md-btn md-btn-ghost" href="/lobby/{{ lobby_id }}/client" target="_blank" rel="noopener">👁️ Vue joueur</a>
-        <a class="md-btn md-btn-ghost" href="/menu">Menu</a>
+
+      <div class="pkd-code">
+        <div class="pkd-code-label">Code de la partie</div>
+        <div class="pkd-code-row">
+          <div class="pkd-code-value" id="lobbyId">{{ lobby_id }}</div>
+          <button class="pkd-icon-btn" type="button" id="copyCode" title="Copier">Copier</button>
+        </div>
+        <div id="statusBadge" class="pkd-badge is-waiting">En attente</div>
+      </div>
+
+      <div class="pkd-actions">
+        <a class="pkd-link" href="/lobby/{{ lobby_id }}/client" target="_blank" rel="noopener">Ouvrir la vue joueur</a>
+        <a class="pkd-link" href="/">Accueil</a>
       </div>
     </header>
 
-    <!-- MAIN CONTENT -->
-    <main class="host-main">
-      <!-- LEFT SIDEBAR: CONTROLS -->
-      <aside class="host-sidebar">
-        <div class="host-sidebar-section">
-          <h3>Contrôles</h3>
-          <div id="buttonContainer" class="host-buttons-group">
-            <!-- Les boutons vont être générés dynamiquement -->
-          </div>
-          <div id="hostMsg" class="host-message"></div>
+    <main class="pkd-main">
+      <aside class="pkd-side">
+        <div class="pkd-panel">
+          <div class="pkd-panel-title">Controle</div>
+          <div id="buttonContainer" class="pkd-buttons"></div>
+          <div id="hostMsg" class="pkd-msg" role="status" aria-live="polite"></div>
         </div>
 
-        <!-- SETTINGS PANEL -->
-        <div class="host-sidebar-section">
-          <h3>⚙️ Paramètres</h3>
-          <div class="host-settings">
-            <div class="setting-item">
-              <label for="maxPlayers">Joueurs max:</label>
-              <input type="number" id="maxPlayers" min="1" max="50" value="10" />
+        <div class="pkd-panel">
+          <div class="pkd-panel-title">Etat</div>
+          <div class="pkd-stats">
+            <div class="pkd-stat">
+              <div class="pkd-stat-label">Phase</div>
+              <div class="pkd-stat-value" id="phase">waiting</div>
             </div>
-            <div class="setting-item">
-              <label for="questionTimer">Temps par question (s):</label>
-              <input type="number" id="questionTimer" min="5" max="120" value="30" />
+            <div class="pkd-stat">
+              <div class="pkd-stat-label">Question</div>
+              <div class="pkd-stat-value"><span id="qIndex">-</span> / <span id="qTotal">-</span></div>
+            </div>
+            <div class="pkd-stat">
+              <div class="pkd-stat-label">Temps</div>
+              <div class="pkd-stat-value"><span id="timeRemaining">-</span>s</div>
             </div>
           </div>
         </div>
       </aside>
 
-      <!-- CENTRAL CONTENT -->
-      <section class="host-content">
-        <!-- GAME STATE -->
-        <div class="host-panel game-state-panel">
-          <h2>📊 État du jeu</h2>
-          <div class="game-state-info">
-            <div class="info-item">
-              <span class="info-label">Phase:</span>
-              <span id="phase" class="info-value">En attente...</span>
+      <section class="pkd-center">
+        <div class="pkd-panel pkd-question-panel">
+          <div class="pkd-panel-title">Question courante</div>
+
+          <div id="questionBox" class="pkd-question" style="display:none">
+            <div class="pkd-qmeta">
+              <div class="pkd-qcat" id="category">Categorie</div>
+              <div class="pkd-pot">
+                <div class="pkd-pot-label">Mise totale</div>
+                <div class="pkd-pot-value" id="potTotal">0</div>
+              </div>
             </div>
-            <div class="info-item">
-              <span class="info-label">Question:</span>
-              <span id="qIndex" class="info-value">-</span> / <span id="qTotal">-</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Temps restant:</span>
-              <span id="timeRemaining" class="info-value timer">-</span>s
-            </div>
+            <div class="pkd-qprompt" id="prompt">...</div>
+
+            <div id="answers" class="pkd-answers"></div>
+            <div id="explanationBox" class="pkd-explanation" style="display:none"></div>
           </div>
 
-          <!-- QUESTION DISPLAY -->
-          <div id="questionBox" class="question-box" style="display: none;">
-            <div class="question-category" id="category">Catégorie</div>
-            <div class="question-prompt" id="prompt">Question en attente...</div>
-            
-            <!-- ANSWERS WITH STATISTICS -->
-            <div id="answers" class="answers-grid"></div>
+          <div id="noQuestion" class="pkd-empty">
+            La partie n'a pas encore commence. Lance la partie quand tu es pret.
           </div>
         </div>
 
-        <!-- LEADERBOARD -->
-        <div class="host-panel leaderboard-panel">
-          <h2>🏆 Classement</h2>
-          <div id="leaderboard" class="host-leaderboard"></div>
+        <div class="pkd-panel">
+          <div class="pkd-panel-title">Classement</div>
+          <div id="leaderboard" class="pkd-leaderboard"></div>
         </div>
       </section>
 
-      <!-- RIGHT SIDEBAR: PLAYERS LIST -->
-      <aside class="host-players-sidebar">
-        <h2>👥 Joueurs ({playersCount})</h2>
-        <div id="playersList" class="host-players-list"></div>
+      <aside class="pkd-players">
+        <div class="pkd-panel pkd-players-panel">
+          <div class="pkd-panel-title" id="playersHeader">Joueurs (0)</div>
+          <div id="playersList" class="pkd-players-list"></div>
+        </div>
       </aside>
     </main>
   </div>

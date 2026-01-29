@@ -114,11 +114,11 @@ function updateSelectedInfo(){
   const amount = betInput ? Number(betInput.value || '0') : 0;
 
   if(selectedAction === 'check'){
-    info.textContent = `${answerText} · Check`;
+    info.textContent = `${answerText} ï¿½ Check`;
   } else if(selectedAction === 'all-in'){
-    info.textContent = `${answerText} · All-in`;
+    info.textContent = `${answerText} ï¿½ All-in`;
   } else {
-    info.textContent = `${answerText} · Bet ${amount}`;
+    info.textContent = `${answerText} ï¿½ Bet ${amount}`;
   }
 }
 
@@ -288,7 +288,7 @@ async function submit(){
     document.querySelector(`.pk-answer[data-key="${k}"]`)?.classList.add('is-wrong');
   }
 
-  setMessage(`Bonne reponse: ${res.correct}) ${res.correct_label} | Action: ${res.action} | Gain: ${res.gained} | Perte: ${res.lost}${res.explanation ? ' — ' + res.explanation : ''}`);
+  setMessage(`Bonne reponse: ${res.correct}) ${res.correct_label} | Action: ${res.action} | Gain: ${res.gained} | Perte: ${res.lost}${res.explanation ? ' - ' + res.explanation : ''}`);
 
   setTimeout(() => { refresh().catch(() => {}); }, 650);
 }

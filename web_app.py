@@ -43,6 +43,7 @@ except Exception:
     pass
 
 import os
+import sys
 import secrets
 import threading
 import time
@@ -61,6 +62,27 @@ from moneydrop.session import GameSession, SessionManager, LobbyManager, LobbyPl
 
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+class _WSGILogFilter:
+    """Drop noisy BrokenPipe logs emitted by eventlet when clients abort downloads."""
+
+    def __init__(self, stream):
+        self.stream = stream
+
+    def write(self, msg: str) -> None:  # type: ignore[override]
+        if "Broken pipe" in msg or "BrokenPipeError" in msg:
+            return
+        try:
+            self.stream.write(msg)
+        except Exception:
+            pass
+
+    def flush(self) -> None:  # pragma: no cover - passthrough
+        try:
+            self.stream.flush()
+        except Exception:
+            pass
 
 
 def create_app() -> Flask:
